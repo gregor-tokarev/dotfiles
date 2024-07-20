@@ -1,2 +1,2 @@
 alias lg='lazygit'
-alies ld='lazydocker'
+alias ld='lazydocker'
