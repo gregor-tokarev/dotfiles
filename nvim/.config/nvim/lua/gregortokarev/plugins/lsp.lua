@@ -21,7 +21,7 @@ return {
         end)
 
         require('mason-lspconfig').setup({
-            ensure_installed = { "lua_ls", "rust_analyzer", "tsserver", "volar", "tailwindcss", "angularls", "ansiblels", "astro", "somesass_ls", "cssls" },
+            ensure_installed = { "lua_ls", "rust_analyzer", "tsserver", "volar", "tailwindcss", "angularls", "ansiblels", "astro", "somesass_ls", "cssls", "eslint_d" },
             handlers = {
                 -- this first function is the "default handler"
                 -- it applies to every language server without a "custom handler"
