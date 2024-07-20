@@ -1,0 +1,8 @@
+---
+"workspace:activate_prev_tab": "shift-cmd-{"
+"pane_group:navigate_right": none
+"workspace:activate_next_tab": "shift-cmd-}"
+"workspace:move_tab_left": ctrl-shift-left
+"workspace:move_tab_right": ctrl-shift-right
+"pane_group:navigate_left": none
+"workspace:rename_active_tab": none
