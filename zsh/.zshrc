@@ -5,3 +5,5 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completio
 
 source ./aliases.sh
+# Load Angular CLI autocompletion.
+source <(ng completion script)
