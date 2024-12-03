@@ -11,3 +11,6 @@ alias ld='lazydocker'
 
 # Load Angular CLI autocompletion.
 source <(ng completion script)
+
+export DVM_DIR="/Users/gregortokarev/.dvm"
+export PATH="$DVM_DIR/bin:$PATH"
