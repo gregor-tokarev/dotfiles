@@ -22,9 +22,10 @@ return {
 
 		require("mason-lspconfig").setup({
 			ensure_installed = {
+				"gopls",
 				"lua_ls",
 				"rust_analyzer",
-				"tsserver",
+				"ts_ls",
 				"volar",
 				"tailwindcss",
 				"angularls",
@@ -32,9 +33,8 @@ return {
 				"astro",
 				"somesass_ls",
 				"cssls",
-				"eslint_d",
+				"eslint",
 				"mdx_analyzer",
-				"gopls",
 			},
 			handlers = {
 				-- this first function is the "default handler"
@@ -42,7 +42,56 @@ return {
 				function(server_name)
 					require("lspconfig")[server_name].setup({})
 				end,
-				["tsserver"] = function()
+				["gopls"] = function()
+					local function organize_imports()
+						local params = vim.lsp.util.make_range_params()
+						params.context = { only = { "source.organizeImports" } }
+						-- buf_request_sync defaults to a 1000ms timeout. Depending on your
+						-- machine and codebase, you may want longer. Add an additional
+						-- argument after params if you find that you have to write the file
+						-- twice for changes to be saved.
+						-- E.g., vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
+						local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params)
+						for cid, res in pairs(result or {}) do
+							for _, r in pairs(res.result or {}) do
+								if r.edit then
+									local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
+									vim.lsp.util.apply_workspace_edit(r.edit, enc)
+								end
+							end
+						end
+						vim.lsp.buf.format({ async = false })
+					end
+
+					vim.keymap.set("n", "<leader>oi", organize_imports, {})
+
+					require("lspconfig").gopls.setup({
+						settings = {
+							gopls = {
+								analyses = {
+									nilness = true,
+									unusedparams = true,
+									unusedwrite = true,
+									useany = true,
+								},
+								experimentalPostfixCompletions = true,
+								gofumpt = true,
+								staticcheck = true,
+								usePlaceholders = true,
+								hints = {
+									assignVariableTypes = true,
+									compositeLiteralFields = true,
+									compositeLiteralTypes = true,
+									constantValues = true,
+									functionTypeParameters = true,
+									parameterNames = true,
+									rangeVariableTypes = true,
+								},
+							},
+						},
+					})
+				end,
+				["ts_ls"] = function()
 					local function organize_imports()
 						local params = {
 							command = "_typescript.organizeImports",
@@ -53,7 +102,6 @@ return {
 					end
 
 					vim.keymap.set("n", "<leader>oi", organize_imports, {})
-
 					local vue_typescript_plugin = require("mason-registry")
 						.get_package("vue-language-server")
 						:get_install_path() .. "/node_modules/@vue/language-server" .. "/node_modules/@vue/typescript-plugin"
