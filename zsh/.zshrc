@@ -7,7 +7,8 @@ export NVM_DIR="$HOME/.nvm"
 alias lg='lazygit'
 alias ld='lazydocker'
 # source ./aliases.sh
-
+export GOPATH=$HOME/go
+export PATH=$GOPATH/bin:$PATH
 
 # Load Angular CLI autocompletion.
 source <(ng completion script)
