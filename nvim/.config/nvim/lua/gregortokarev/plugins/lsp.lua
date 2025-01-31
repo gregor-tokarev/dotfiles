@@ -42,6 +42,15 @@ return {
 				function(server_name)
 					require("lspconfig")[server_name].setup({})
 				end,
+				["rust_analyzer"] = function()
+					require("lspconfig")["rust_analyzer"].setup({
+						settings = {
+							diagnostics = {
+								refreshSupport = false,
+							},
+						},
+					})
+				end,
 				["gopls"] = function()
 					local function organize_imports()
 						local params = vim.lsp.util.make_range_params()
