@@ -26,6 +26,8 @@ source <(ng completion script)
 export DVM_DIR="/Users/gregortokarev/.dvm"
 export PATH="$DVM_DIR/bin:$PATH"
 
+export EDITOR=nvim
+
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 
