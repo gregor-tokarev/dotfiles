@@ -13,10 +13,15 @@ export NVM_DIR="$HOME/.nvm"
 
 alias lg='lazygit'
 alias ld='lazydocker'
+alias k='kubectl'
+alias tk='tsh kubectl'
+
+export KUBECONFIG=~/.kube/k8s-wbxindex-nb.yaml
 
 # source ./aliases.sh
 export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
+export GOPRIVATE='gitlab.wildberries.ru/*'
 
 source $HOME/.cargo/env 
 
@@ -26,7 +31,8 @@ source <(ng completion script)
 export DVM_DIR="/Users/gregortokarev/.dvm"
 export PATH="$DVM_DIR/bin:$PATH"
 
-export EDITOR=nvim
+export EDITOR=cursor
+export E=$EDITOR
 
 # If you come from bash you might have to change your $PATH.
 # export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
@@ -79,3 +85,16 @@ source $ZSH/oh-my-zsh.sh
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+
+# bun completions
+[ -s "/Users/gregortokarev/.bun/_bun" ] && source "/Users/gregortokarev/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Added by Windsurf
+export PATH="/Users/gregortokarev/.codeium/windsurf/bin:$PATH"
+
+export TELEPORT_PROXY=tp.wb.ru:443
+export PATH="/Users/gregortokarev/.local/bin:$PATH"
