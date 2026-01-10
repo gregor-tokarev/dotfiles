@@ -1,0 +1,61 @@
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run `zed: open default settings` from the
+// command palette
+{
+  "edit_predictions": {
+    "mode": "eager",
+  },
+  "base_keymap": "Cursor",
+  "show_edit_predictions": false,
+  "agent_servers": {
+    "claude": {
+      "default_mode": "bypassPermissions",
+    },
+  },
+  "icon_theme": "Material Icon Theme",
+  "features": {
+    "edit_prediction_provider": "zed",
+  },
+  "agent": {
+    "default_model": {
+      "provider": "openrouter",
+      "model": "mistralai/mistral-small-creative"
+    },
+    "button": true,
+    "enable_feedback": false,
+    "always_allow_tool_actions": true,
+    "default_profile": "write",
+  },
+  "language_models": {
+    "open_router": {
+      "api_url": "https://openrouter.ai/api/v1",
+      "available_models": [
+        {
+          "name": "gpt-oss-120b",
+          "display_name": "GPT-OSS-120B",
+          "max_tokens": 128000,
+          "supports_tools": true,
+          "supports_images": false,
+        },
+      ],
+    },
+  },
+  "format_on_save": "on",
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false,
+  },
+  "vim_mode": true,
+  "ui_font_size": 18,
+  "buffer_font_size": 16,
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "Catppuccin Mocha - No Italics",
+  },
+}

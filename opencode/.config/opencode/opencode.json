@@ -1,0 +1,20 @@
+{
+  "mcp": {
+    "MCP_DOCKER": {
+      "type": "local",
+      "command": [
+        "docker",
+        "mcp",
+        "gateway",
+        "run"
+      ],
+      "enabled": true
+    }
+  },
+  "keybinds": {
+    "history_next": "ctrl+n",
+    "history_previous": "ctrl+p"
+  },
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": []
+}

@@ -1,0 +1,37 @@
+// Zed keymap
+//
+// For information on binding keys, see the Zed
+// documentation: https://zed.dev/docs/key-bindings
+//
+// To see the default key bindings run `zed: open default keymap`
+// from the command palette.
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-g": [
+        "task::Spawn",
+        { "lazygit": "open_lazygit", "reveal_target": "center" }
+      ],
+      "cmd-d": [
+        "task::Spawn",
+        { "lazygit": "open_lazydocker", "reveal_target": "center" }
+      ],
+      "cmd-o cmd-r": "projects::OpenRecent"
+    }
+  },
+  {
+    "context": "Editor",
+    "bindings": {
+      // "j k": ["workspace::SendKeystrokes", "escape"]
+      "cmd-g": [
+        "task::Spawn",
+        { "lazygit": "open_lazygit", "reveal_target": "center" }
+      ],
+      "cmd-d": [
+        "task::Spawn",
+        { "lazygit": "open_lazydocker", "reveal_target": "center" }
+      ]
+    }
+  }
+]

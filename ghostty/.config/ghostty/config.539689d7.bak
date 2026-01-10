@@ -1,8 +1,6 @@
 font-family = JetBrains Mono
 font-size = 16
 
-fullscreen = false
-maximize = true
+fullscreen = true
 focus-follows-mouse = true
 
-keybind = shift+enter=text:\x1b\r

@@ -5,6 +5,8 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+source ~/secrets.sh
+
 export PATH=/opt/homebrew/bin:$PATH
 
 export NVM_DIR="$HOME/.nvm"
@@ -21,12 +23,14 @@ export KUBECONFIG=~/.kube/k8s-wbxindex-nb.yaml
 # source ./aliases.sh
 export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
-export GOPRIVATE='gitlab.wildberries.ru/*'
+export GOPRIVATE='gitlab.wildberries.ru/*,github.com/make-core/*'
 
 source $HOME/.cargo/env 
 
-# Load Angular CLI autocompletion.
-source <(ng completion script)
+# Load Angular CLI autocompletion when available.
+if command -v ng >/dev/null 2>&1; then
+  source <(ng completion script)
+fi
 
 export DVM_DIR="/Users/gregortokarev/.dvm"
 export PATH="$DVM_DIR/bin:$PATH"
@@ -98,3 +102,6 @@ export PATH="/Users/gregortokarev/.codeium/windsurf/bin:$PATH"
 
 export TELEPORT_PROXY=tp.wb.ru:443
 export PATH="/Users/gregortokarev/.local/bin:$PATH"
+
+# Added by Antigravity
+export PATH="/Users/gregortokarev/.antigravity/antigravity/bin:$PATH"
