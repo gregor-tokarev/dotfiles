@@ -10,7 +10,6 @@ brew tap antoniorodr/memo
 brew tap charmbracelet/tap
 brew tap markmarkoh/lt
 brew tap tw93/tap
-brew tap koekeishiya/formulae
 brew tap derailed/k9s
 brew tap bufbuild/buf
 
@@ -18,7 +17,7 @@ brew tap bufbuild/buf
 
 brew install stow ripgrep fzf bat eza zoxide tmux
 brew install lazygit lazydocker k9s kubectx kubernetes-cli gh
-brew install yazi btop htop neovim yq fd skhd
+brew install yazi btop htop neovim yq fd
 brew install git-filter-repo nmap mkcert pnpm tokei watch node
 brew install television superfile codecrafters grpcurl cmake buf
 brew install lt memo crush mole
@@ -95,7 +94,6 @@ stow ghostty
 stow npm
 stow opencode
 stow warp
-stow yabai
 stow zed
 stow karabiner
 stow gh-dash
