@@ -93,7 +93,7 @@ stow claude
 stow ghostty
 stow npm
 stow opencode
-stow warp
+
 stow zed
 stow karabiner
 stow gh-dash
