@@ -11,11 +11,11 @@
     "bindings": {
       "cmd-g": [
         "task::Spawn",
-        { "lazygit": "open_lazygit", "reveal_target": "center" }
+        { "task_name": "open_lazygit", "reveal_target": "center" }
       ],
       "cmd-d": [
         "task::Spawn",
-        { "lazygit": "open_lazydocker", "reveal_target": "center" }
+        { "task_name": "open_lazydocker", "reveal_target": "center" }
       ],
       "cmd-o cmd-r": "projects::OpenRecent"
     }
@@ -26,11 +26,11 @@
       // "j k": ["workspace::SendKeystrokes", "escape"]
       "cmd-g": [
         "task::Spawn",
-        { "lazygit": "open_lazygit", "reveal_target": "center" }
+        { "task_name": "open_lazygit", "reveal_target": "center" }
       ],
       "cmd-d": [
         "task::Spawn",
-        { "lazygit": "open_lazydocker", "reveal_target": "center" }
+        { "task_name": "open_lazydocker", "reveal_target": "center" }
       ]
     }
   }

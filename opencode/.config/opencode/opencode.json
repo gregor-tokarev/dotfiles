@@ -1,20 +1,22 @@
 {
-  "mcp": {
-    "MCP_DOCKER": {
-      "type": "local",
-      "command": [
-        "docker",
-        "mcp",
-        "gateway",
-        "run"
-      ],
-      "enabled": true
+  "$schema": "https://opencode.ai/config.json",
+  "permission": "allow",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:1234/v1"
+      },
+      "models": {
+        "qwen/qwen3.5-9b": {
+          "name": "Qwen 3.5 9B (local)"
+        }
+      }
     }
   },
-  "keybinds": {
-    "history_next": "ctrl+n",
-    "history_previous": "ctrl+p"
-  },
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": []
+  "model": "opencode-go/glm-5.1",
+  "small_model": "opencode-go/glm-5.1",
+  "plugin": [],
+  "mcp": {}
 }

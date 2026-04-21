@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Bash",
       "Edit",
@@ -11,12 +10,121 @@
       "WebFetch",
       "WebSearch",
       "Task",
-      "NotebookEdit"
+      "NotebookEdit",
+      "mcp__better-auth__search",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "mcp__shadcn__get_project_registries",
+      "mcp__shadcn__search_items_in_registries",
+      "mcp__shadcn__list_items_in_registries",
+      "mcp__convex__status",
+      "mcp__convex__tables",
+      "mcp__convex__logs",
+      "mcp__convex__envList",
+      "mcp__convex__functionSpec"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/session-register.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/session-register.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/task-pulse.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
-  "hooks": {},
   "statusLine": {
     "type": "command",
     "command": "~/.claude/statusline-command.sh"
-  }
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
+  },
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "skipDangerousModePermissionPrompt": true
 }

@@ -8,27 +8,53 @@
 // command palette
 {
   "edit_predictions": {
+    "provider": "zed",
     "mode": "eager",
   },
   "base_keymap": "Cursor",
-  "show_edit_predictions": false,
+  "show_edit_predictions": true,
   "agent_servers": {
-    "claude": {
-      "default_mode": "bypassPermissions",
+    "opencode": {
+      "favorite_config_option_values": {
+        "model": [
+          "opencode-go/glm-5.1"
+        ]
+      },
+      "default_config_options": {
+        "model": "opencode-go/glm-5"
+      },
+      "type": "registry"
     },
+    "codex-acp": {
+      "type": "registry",
+      "default_config_options": {
+        "reasoning_effort": "high"
+      }
+    },
+    "claude-acp": {
+      "default_config_options": {
+        "mode": "bypassPermissions"
+      },
+      "type": "registry",
+      "default_mode": "bypassPermissions",
+      "default_model": "opus"
+    }
   },
   "icon_theme": "Material Icon Theme",
-  "features": {
-    "edit_prediction_provider": "zed",
-  },
   "agent": {
+    "tool_permissions": {
+      "default": "allow"
+    },
+    "inline_assistant_model": {
+      "provider": "openrouter",
+      "model": "moonshotai/kimi-k2.5"
+    },
     "default_model": {
       "provider": "openrouter",
-      "model": "mistralai/mistral-small-creative"
+      "model": "moonshotai/kimi-k2.5"
     },
     "button": true,
     "enable_feedback": false,
-    "always_allow_tool_actions": true,
     "default_profile": "write",
   },
   "language_models": {
@@ -45,17 +71,18 @@
       ],
     },
   },
-  "format_on_save": "on",
+  "format_on_save": "off",
+  "languages": {
+    "YAML": {
+      "format_on_save": "off"
+    }
+  },
   "telemetry": {
     "diagnostics": false,
     "metrics": false,
   },
   "vim_mode": true,
-  "ui_font_size": 18,
-  "buffer_font_size": 16,
-  "theme": {
-    "mode": "system",
-    "light": "One Light",
-    "dark": "Catppuccin Mocha - No Italics",
-  },
+  "ui_font_size": 16,
+  "buffer_font_size": 15,
+  "theme": "Termy Dark",
 }

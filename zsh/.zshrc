@@ -1,3 +1,5 @@
+# Added by ForgeCode installer
+export PATH="/Users/gregortokarev/.local/bin:$PATH"
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -17,6 +19,9 @@ alias lg='lazygit'
 alias ld='lazydocker'
 alias k='kubectl'
 alias tk='tsh kubectl'
+alias cc='CLAUDE_CODE_NO_FLICKER=1 claude --dangerously-skip-permissions'
+
+alias wb='cd ~/work/wbx && spf'
 
 export KUBECONFIG=~/.kube/k8s-wbxindex-nb.yaml
 
@@ -35,7 +40,7 @@ fi
 export DVM_DIR="/Users/gregortokarev/.dvm"
 export PATH="$DVM_DIR/bin:$PATH"
 
-export EDITOR=cursor
+export EDITOR=zed
 export E=$EDITOR
 
 # If you come from bash you might have to change your $PATH.
@@ -101,7 +106,78 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 export PATH="/Users/gregortokarev/.codeium/windsurf/bin:$PATH"
 
 export TELEPORT_PROXY=tp.wb.ru:443
-export PATH="/Users/gregortokarev/.local/bin:$PATH"
 
 # Added by Antigravity
 export PATH="/Users/gregortokarev/.antigravity/antigravity/bin:$PATH"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/gregortokarev/.lmstudio/bin"
+# End of LM Studio CLI section
+
+
+# zerobrew
+export ZEROBREW_DIR=/Users/gregortokarev/.zerobrew
+export ZEROBREW_BIN=/Users/gregortokarev/.zerobrew/bin
+export ZEROBREW_ROOT=/opt/zerobrew
+export ZEROBREW_PREFIX=/opt/zerobrew/prefix
+export PKG_CONFIG_PATH="$ZEROBREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+# SSL/TLS certificates (only if ca-certificates is installed)
+if [ -f "$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem" ]; then
+  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem"
+  export SSL_CERT_FILE="$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem"
+elif [ -f "$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem" ]; then
+  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem"
+  export SSL_CERT_FILE="$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem"
+elif [ -f "$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem" ]; then
+  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem"
+  export SSL_CERT_FILE="$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem"
+fi
+
+if [ -d "$ZEROBREW_PREFIX/etc/ca-certificates" ]; then
+  export SSL_CERT_DIR="$ZEROBREW_PREFIX/etc/ca-certificates"
+elif [ -d "$ZEROBREW_PREFIX/share/ca-certificates" ]; then
+  export SSL_CERT_DIR="$ZEROBREW_PREFIX/share/ca-certificates"
+fi
+
+# Helper function to safely append to PATH
+_zb_path_append() {
+    local argpath="$1"
+    case ":${PATH}:" in
+        *:"$argpath":*) ;;
+        *) export PATH="$argpath:$PATH" ;;
+    esac;
+}
+
+_zb_path_append "$ZEROBREW_BIN"
+_zb_path_append "$ZEROBREW_PREFIX/bin"
+
+# Added by Antigravity
+export PATH="/Users/gregortokarev/.antigravity/antigravity/bin:$PATH"
+
+# >>> forge initialize >>>
+# !! Contents within this block are managed by 'forge zsh setup' !!
+# !! Do not edit manually - changes will be overwritten !!
+
+# Add required zsh plugins if not already present
+if [[ ! " ${plugins[@]} " =~ " zsh-autosuggestions " ]]; then
+    plugins+=(zsh-autosuggestions)
+fi
+if [[ ! " ${plugins[@]} " =~ " zsh-syntax-highlighting " ]]; then
+    plugins+=(zsh-syntax-highlighting)
+fi
+
+# Load forge shell plugin (commands, completions, keybindings) if not already loaded
+if [[ -z "$_FORGE_PLUGIN_LOADED" ]]; then
+    eval "$(forge zsh plugin)"
+fi
+
+# Load forge shell theme (prompt with AI context) if not already loaded
+if [[ -z "$_FORGE_THEME_LOADED" ]]; then
+    eval "$(forge zsh theme)"
+fi
+
+# Editor for editing prompts (set during setup)
+# To change: update FORGE_EDITOR or remove to use $EDITOR
+export FORGE_EDITOR="nvim"
+# <<< forge initialize <<<
