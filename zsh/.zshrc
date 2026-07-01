@@ -1,5 +1,5 @@
 # Added by ForgeCode installer
-export PATH="/Users/gregortokarev/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -7,7 +7,7 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-source ~/secrets.sh
+[[ -f ~/secrets.sh ]] && source ~/secrets.sh
 
 export PATH=/opt/homebrew/bin:$PATH
 
@@ -47,7 +47,7 @@ if command -v ng >/dev/null 2>&1; then
   source <(ng completion script)
 fi
 
-export DVM_DIR="/Users/gregortokarev/.dvm"
+export DVM_DIR="$HOME/.dvm"
 export PATH="$DVM_DIR/bin:$PATH"
 
 export EDITOR=zed
@@ -106,15 +106,15 @@ source $ZSH/oh-my-zsh.sh
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 
 # bun completions
-[ -s "/Users/gregortokarev/.bun/_bun" ] && source "/Users/gregortokarev/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Added by Windsurf
-export PATH="/Users/gregortokarev/.codeium/windsurf/bin:$PATH"
+export PATH="$HOME/.codeium/windsurf/bin:$PATH"
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/gregortokarev/.lmstudio/bin"
+export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section

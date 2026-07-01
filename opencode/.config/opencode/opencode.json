@@ -13,29 +13,6 @@
           "name": "Qwen 3.5 9B (local)"
         }
       }
-    },
-    "gonkagate": {
-      "api": "chat_completions",
-      "models": {
-        "qwen3-235b-a22b-instruct-2507-fp8": {
-          "id": "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8",
-          "name": "Qwen3 235B A22B Instruct 2507 FP8"
-        },
-        "kimi-k2.6": {
-          "id": "moonshotai/Kimi-K2.6",
-          "name": "Kimi K2.6"
-        },
-        "minimax-m2.7": {
-          "id": "MiniMaxAI/MiniMax-M2.7",
-          "name": "MiniMax M2.7"
-        }
-      },
-      "name": "Gonka Proxy",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "apiKey": "{file:~/.gonkagate/opencode/api-key}",
-        "baseURL": "https://proxy.gonka.gg/v1"
-      }
     }
   },
   "model": "opencode-go/glm-5.2",

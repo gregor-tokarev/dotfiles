@@ -1,5 +1,4 @@
 #!/bin/zsh
-set -e
 
 DOTFILES="$HOME/dotfiles"
 
