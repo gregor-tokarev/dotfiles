@@ -12,6 +12,7 @@ brew tap markmarkoh/lt
 brew tap tw93/tap
 brew tap derailed/k9s
 brew tap bufbuild/buf
+brew tap codecrafters-io/tap
 
 # ─── Brew Formulas ───────────────────────────────────────────────────────────
 
@@ -20,7 +21,7 @@ brew install lazygit lazydocker k9s kubectx kubernetes-cli gh
 brew install yazi btop htop neovim yq fd
 brew install git-filter-repo nmap mkcert pnpm tokei watch node
 brew install television superfile codecrafters grpcurl cmake buf
-brew install lt memo crush mole
+brew install lt memo crush mole glab railway
 
 # ─── Brew Casks ──────────────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ brew install --cask karabiner-elements
 brew install --cask zed
 brew install --cask obsidian
 brew install --cask linear
-brew install --cask docker
+brew install --cask docker-desktop
 brew install --cask postman
 brew install --cask arc
 brew install --cask firefox
@@ -84,13 +85,21 @@ if ! command -v codex &>/dev/null; then
   npm install -g @openai/codex
 fi
 
+# Agent Skills + local dev tooling
+npm install -g skills agent-browser portless vite-plus
+npx skills add vercel-labs/agent-browser -g --skill agent-browser --agent '*' -y --copy
+npx skills add vercel-labs/portless -g --skill portless --agent '*' -y --copy
+
 # ─── GNU Stow ─────────────────────────────────────────────────────────────────
 
 cd "$DOTFILES"
 stow nvim
 stow zsh
 stow claude
+stow agents
+stow git
 stow ghostty
+stow kitty
 stow npm
 stow opencode
 

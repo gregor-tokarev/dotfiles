@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "Sisyphus": {
+      "model": "opencode/big-pickle"
+    },
+    "librarian": {
+      "model": "opencode/big-pickle"
+    },
+    "explore": {
+      "model": "opencode/big-pickle"
+    },
+    "oracle": {
+      "model": "opencode/big-pickle"
+    },
+    "frontend-ui-ux-engineer": {
+      "model": "opencode/big-pickle"
+    },
+    "document-writer": {
+      "model": "opencode/big-pickle"
+    },
+    "multimodal-looker": {
+      "model": "opencode/big-pickle"
+    }
+  }
+}

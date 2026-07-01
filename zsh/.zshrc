@@ -12,25 +12,35 @@ source ~/secrets.sh
 export PATH=/opt/homebrew/bin:$PATH
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completio
+_load_nvm() {
+  unset -f nvm node npm npx pnpm pnpx yarn
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  "$@"
+}
+
+nvm() { _load_nvm nvm "$@"; }
+node() { _load_nvm node "$@"; }
+npm() { _load_nvm npm "$@"; }
+npx() { _load_nvm npx "$@"; }
+pnpm() { _load_nvm pnpm "$@"; }
+pnpx() { _load_nvm pnpx "$@"; }
+yarn() { _load_nvm yarn "$@"; }
 
 alias lg='lazygit'
 alias ld='lazydocker'
 alias k='kubectl'
 alias tk='tsh kubectl'
 alias cc='CLAUDE_CODE_NO_FLICKER=1 claude --dangerously-skip-permissions'
+alias oc='opencode'
 
-alias wb='cd ~/work/wbx && spf'
-
-export KUBECONFIG=~/.kube/k8s-wbxindex-nb.yaml
+[[ -f "$HOME/.config/zsh/wbx.zsh" ]] && source "$HOME/.config/zsh/wbx.zsh"
 
 # source ./aliases.sh
 export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$PATH
-export GOPRIVATE='gitlab.wildberries.ru/*,github.com/make-core/*'
 
-source $HOME/.cargo/env 
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 # Load Angular CLI autocompletion when available.
 if command -v ng >/dev/null 2>&1; then
@@ -105,79 +115,6 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # Added by Windsurf
 export PATH="/Users/gregortokarev/.codeium/windsurf/bin:$PATH"
 
-export TELEPORT_PROXY=tp.wb.ru:443
-
-# Added by Antigravity
-export PATH="/Users/gregortokarev/.antigravity/antigravity/bin:$PATH"
-
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/gregortokarev/.lmstudio/bin"
 # End of LM Studio CLI section
-
-
-# zerobrew
-export ZEROBREW_DIR=/Users/gregortokarev/.zerobrew
-export ZEROBREW_BIN=/Users/gregortokarev/.zerobrew/bin
-export ZEROBREW_ROOT=/opt/zerobrew
-export ZEROBREW_PREFIX=/opt/zerobrew/prefix
-export PKG_CONFIG_PATH="$ZEROBREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-
-# SSL/TLS certificates (only if ca-certificates is installed)
-if [ -f "$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem" ]; then
-  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem"
-  export SSL_CERT_FILE="$ZEROBREW_PREFIX/opt/ca-certificates/share/ca-certificates/cacert.pem"
-elif [ -f "$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem" ]; then
-  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem"
-  export SSL_CERT_FILE="$ZEROBREW_PREFIX/etc/ca-certificates/cacert.pem"
-elif [ -f "$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem" ]; then
-  export CURL_CA_BUNDLE="$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem"
-  export SSL_CERT_FILE="$ZEROBREW_PREFIX/share/ca-certificates/cacert.pem"
-fi
-
-if [ -d "$ZEROBREW_PREFIX/etc/ca-certificates" ]; then
-  export SSL_CERT_DIR="$ZEROBREW_PREFIX/etc/ca-certificates"
-elif [ -d "$ZEROBREW_PREFIX/share/ca-certificates" ]; then
-  export SSL_CERT_DIR="$ZEROBREW_PREFIX/share/ca-certificates"
-fi
-
-# Helper function to safely append to PATH
-_zb_path_append() {
-    local argpath="$1"
-    case ":${PATH}:" in
-        *:"$argpath":*) ;;
-        *) export PATH="$argpath:$PATH" ;;
-    esac;
-}
-
-_zb_path_append "$ZEROBREW_BIN"
-_zb_path_append "$ZEROBREW_PREFIX/bin"
-
-# Added by Antigravity
-export PATH="/Users/gregortokarev/.antigravity/antigravity/bin:$PATH"
-
-# >>> forge initialize >>>
-# !! Contents within this block are managed by 'forge zsh setup' !!
-# !! Do not edit manually - changes will be overwritten !!
-
-# Add required zsh plugins if not already present
-if [[ ! " ${plugins[@]} " =~ " zsh-autosuggestions " ]]; then
-    plugins+=(zsh-autosuggestions)
-fi
-if [[ ! " ${plugins[@]} " =~ " zsh-syntax-highlighting " ]]; then
-    plugins+=(zsh-syntax-highlighting)
-fi
-
-# Load forge shell plugin (commands, completions, keybindings) if not already loaded
-if [[ -z "$_FORGE_PLUGIN_LOADED" ]]; then
-    eval "$(forge zsh plugin)"
-fi
-
-# Load forge shell theme (prompt with AI context) if not already loaded
-if [[ -z "$_FORGE_THEME_LOADED" ]]; then
-    eval "$(forge zsh theme)"
-fi
-
-# Editor for editing prompts (set during setup)
-# To change: update FORGE_EDITOR or remove to use $EDITOR
-export FORGE_EDITOR="nvim"
-# <<< forge initialize <<<

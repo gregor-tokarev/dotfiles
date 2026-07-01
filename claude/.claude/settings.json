@@ -23,8 +23,9 @@
       "mcp__convex__envList",
       "mcp__convex__functionSpec"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "bypassPermissions"
   },
+  "model": "claude-opus-4-8[1m]",
   "hooks": {
     "SessionStart": [
       {
@@ -112,6 +113,18 @@
           }
         ]
       }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/gregortokarev/.claude/hooks/codecast-status.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -122,9 +135,19 @@
     "frontend-design@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true
+    "gopls-lsp@claude-plugins-official": true,
+    "posthog@claude-plugins-official": false
   },
-  "effortLevel": "high",
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "xhigh",
   "autoUpdatesChannel": "latest",
-  "skipDangerousModePermissionPrompt": true
+  "voice": {
+    "enabled": false,
+    "mode": "hold"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "editorMode": "vim",
+  "preferredNotifChannel": "ghostty",
+  "voiceEnabled": false,
+  "tui": "fullscreen"
 }

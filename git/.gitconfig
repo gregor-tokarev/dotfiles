@@ -1,0 +1,19 @@
+[merge]
+	tool = nvimdiff
+[pull]
+	rebase = false
+[user]
+	name = gregortokarev
+	email = e@tokarev.work
+	; signingKey = ~/.ssh/github_mac.pub
+
+[url "git@github.com:"]
+	insteadOf = https://github.com/
+
+[core]
+	autocrlf = false
+	attributesfile = ~/.gitattributes
+; [commit]
+; 	gpgsign = true
+[credential]
+	helper = manager
