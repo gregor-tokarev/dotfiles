@@ -118,3 +118,9 @@ export PATH="$HOME/.codeium/windsurf/bin:$PATH"
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section
+
+# Vite+ bin (https://viteplus.dev)
+. "$HOME/.vite-plus/env"
+
+
+

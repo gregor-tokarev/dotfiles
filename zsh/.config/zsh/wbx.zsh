@@ -2,5 +2,5 @@ alias tsh17='TELEPORT_HOME=${HOME}/.tsh17 TELEPORT_PROXY=tp.rwb.ru:443 TELEPORT_
 alias wb='cd ~/work/wbx && spf'
 
 export KUBECONFIG=~/.kube/k8s-wbxindex-nb.yaml
-export GOPRIVATE='gitlab.wildberries.ru/*,github.com/make-core/*'
+export GOPRIVATE='gitlab.wildberries.ru/*'
 export TELEPORT_PROXY=tp.wb.ru:443

@@ -64,7 +64,11 @@
     "html": true,
     "material-icon-theme": true,
   },
-  "icon_theme": "Material Icon Theme",
+  "icon_theme": {
+    "mode": "light",
+    "light": "Material Icon Theme",
+    "dark": "Material Icon Theme"
+  },
   "agent": {
     "sidebar_side": "right",
     "dock": "right",
@@ -88,7 +92,7 @@
   "language_models": {
     "opencode": {
       "show_free_models": false,
-      "show_zen_models": true
+      "show_zen_models": false
     },
     "open_router": {
       "api_url": "https://openrouter.ai/api/v1",
@@ -103,7 +107,7 @@
       ],
     },
   },
-  "format_on_save": "on",
+  "format_on_save": "off",
   "languages": {
     "YAML": {
       "format_on_save": "off"
@@ -116,5 +120,9 @@
   "vim_mode": true,
   "ui_font_size": 16,
   "buffer_font_size": 15,
-  "theme": "Ayu Dark",
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "GitHub Dark"
+  },
 }
