@@ -105,6 +105,7 @@ stow opencode
 stow zed
 stow karabiner
 stow gh-dash
+stow raycast # then: Raycast Settings → Extensions → + → Add Script Directory → ~/raycast-scripts
 cd "$HOME"
 
 # ─── macOS Defaults ──────────────────────────────────────────────────────────
