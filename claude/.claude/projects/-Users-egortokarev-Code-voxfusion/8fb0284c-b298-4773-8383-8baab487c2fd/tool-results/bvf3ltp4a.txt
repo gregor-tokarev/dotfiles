@@ -1,0 +1,1410 @@
+===== hooks/useAudioDevices.ts =====
+     1	import { createSignal } from "solid-js";
+     2	import { type AudioDevice, getAudioInputDevices } from "../lib/settingsStore";
+     3	
+     4	export function useAudioDevices() {
+     5		const [devices, setDevices] = createSignal<AudioDevice[]>([]);
+     6		const [isLoading, setIsLoading] = createSignal(false);
+     7		const [error, setError] = createSignal<string | null>(null);
+     8	
+     9		const fetchDevices = async () => {
+    10			setIsLoading(true);
+    11			setError(null);
+    12			const fetchedDevices = await getAudioInputDevices();
+    13			setDevices(fetchedDevices);
+    14			setIsLoading(false);
+    15		};
+    16	
+    17		return {
+    18			devices,
+    19			isLoading,
+    20			error,
+    21			fetchDevices,
+    22		};
+    23	}
+===== hooks/useHotkeyRecorder.ts =====
+     1	import { emit, listen } from "@tauri-apps/api/event";
+     2	import { Result } from "better-result";
+     3	import { createEffect, createSignal, onCleanup } from "solid-js";
+     4	import { startSystemKeyWatcher } from "../lib/commands/permissions";
+     5	import {
+     6		hotkeyDisplayName,
+     7		isModifierCode,
+     8		modifierCodeToDisplay,
+     9		modifierCodeToSystemHotkey,
+    10		systemHotkeyFromKeys,
+    11	} from "../lib/hotkeyUtils";
+    12	import { updateHotkey } from "../lib/settingsStore";
+    13	
+    14	let activeRecordingId: string | null = null;
+    15	
+    16	type SystemKey =
+    17		| "fn"
+    18		| "leftControl"
+    19		| "rightControl"
+    20		| "leftOption"
+    21		| "rightOption"
+    22		| "leftCommand"
+    23		| "rightCommand";
+    24	
+    25	type SystemKeyPressedPayload = {
+    26		key: SystemKey;
+    27		pressedKeys: SystemKey[];
+    28	};
+    29	
+    30	/**
+    31	 * Maps KeyboardEvent.code to the modifier prefix used in combo shortcuts
+    32	 * (e.g., "Command+K"). These are the generic modifier names without left/right
+    33	 * distinction, used when building combo hotkey strings.
+    34	 */
+    35	function codeToComboModifier(code: string): string | undefined {
+    36		switch (code) {
+    37			case "MetaLeft":
+    38			case "MetaRight":
+    39				return "Command";
+    40			case "ShiftLeft":
+    41			case "ShiftRight":
+    42				return "Shift";
+    43			case "AltLeft":
+    44			case "AltRight":
+    45				return "Alt";
+    46			case "ControlLeft":
+    47			case "ControlRight":
+    48				return "Control";
+    49			default:
+    50				return undefined;
+    51		}
+    52	}
+    53	
+    54	/**
+    55	 * Consistent ordering for modifier keys when building shortcut strings.
+    56	 */
+    57	const MOD_ORDER = [
+    58		"MetaLeft",
+    59		"MetaRight",
+    60		"ControlLeft",
+    61		"ControlRight",
+    62		"AltLeft",
+    63		"AltRight",
+    64		"ShiftLeft",
+    65		"ShiftRight",
+    66	];
+    67	
+    68	const CODE_TO_HOTKEY_KEY: Record<string, string> = {
+    69		Backquote: "`",
+    70		Backslash: "\\",
+    71		BracketLeft: "[",
+    72		BracketRight: "]",
+    73		Comma: ",",
+    74		Equal: "=",
+    75		Minus: "-",
+    76		Period: ".",
+    77		Quote: "'",
+    78		Semicolon: ";",
+    79		Slash: "/",
+    80		Space: "Space",
+    81		Tab: "Tab",
+    82		Enter: "Enter",
+    83		Escape: "Escape",
+    84		Backspace: "Backspace",
+    85		Delete: "Delete",
+    86		CapsLock: "CapsLock",
+    87		ArrowDown: "ArrowDown",
+    88		ArrowLeft: "ArrowLeft",
+    89		ArrowRight: "ArrowRight",
+    90		ArrowUp: "ArrowUp",
+    91	};
+    92	
+    93	interface UseHotkeyRecorderOptions {
+    94		onHotkeyRecorded?: (hotkey: string) => Promise<void>;
+    95		validator?: (hotkey: string) => string | null;
+    96		recorderId?: string;
+    97	}
+    98	
+    99	function keyEventToHotkeyKey(e: KeyboardEvent): string {
+   100		if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+   101		if (/^Digit[0-9]$/.test(e.code)) return e.code.slice(5);
+   102		if (/^Numpad/.test(e.code)) return e.code;
+   103		if (/^F[0-9]{1,2}$/.test(e.code)) return e.code;
+   104		return CODE_TO_HOTKEY_KEY[e.code] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+   105	}
+   106	
+   107	export function useHotkeyRecorder(options: UseHotkeyRecorderOptions = {}) {
+   108		const recorderId = options.recorderId || Math.random().toString(36);
+   109		const [isRecording, setIsRecording] = createSignal(false);
+   110		const [pendingHotkey, setPendingHotkey] = createSignal("");
+   111		const [error, setError] = createSignal<string | null>(null);
+   112	
+   113		// Track all currently held modifier codes for combo shortcuts
+   114		let heldModifierCodes = new Set<string>();
+   115		let pendingSystemHotkey = "";
+   116		let isStartingWatcher = false;
+   117	
+   118		const resetTracking = () => {
+   119			heldModifierCodes = new Set<string>();
+   120			pendingSystemHotkey = "";
+   121		};
+   122	
+   123		const setRecorderActive = (active: boolean) => {
+   124			void Result.tryPromise(() => emit("hotkey-recorder-active", { active }));
+   125		};
+   126	
+   127		/**
+   128		 * Tear down the recording session. Releases the shared `activeRecordingId`
+   129		 * lock so another recorder can start — this must run on every completion
+   130		 * path (successful save *and* cancel), otherwise the lock stays held and
+   131		 * the next recorder is wrongly told "another hotkey is being recorded".
+   132		 */
+   133		const finishRecording = () => {
+   134			if (activeRecordingId === recorderId) {
+   135				activeRecordingId = null;
+   136			}
+   137			setIsRecording(false);
+   138			setPendingHotkey("");
+   139			resetTracking();
+   140			setRecorderActive(false);
+   141		};
+   142	
+   143		const saveRecordedHotkey = async (hotkey: string) => {
+   144			const validationError = options.validator?.(hotkey);
+   145			if (validationError) {
+   146				setError(validationError);
+   147				return false;
+   148			}
+   149			setError(null);
+   150			const saved = await Result.tryPromise(async () => {
+   151				await (options.onHotkeyRecorded?.(hotkey) ?? updateHotkey(hotkey));
+   152			});
+   153			if (Result.isError(saved)) {
+   154				return false;
+   155			}
+   156			return true;
+   157		};
+   158	
+   159		/**
+   160		 * Build a display string for currently held modifiers.
+   161		 */
+   162		const buildModifierDisplay = (codes: Set<string>): string => {
+   163			if (codes.size === 1) {
+   164				const first = codes.values().next();
+   165				if (first.done) return "";
+   166				return modifierCodeToDisplay(first.value) ?? first.value;
+   167			}
+   168			const parts: string[] = [];
+   169			for (const mc of MOD_ORDER) {
+   170				if (codes.has(mc)) {
+   171					const display = modifierCodeToDisplay(mc);
+   172					if (display) parts.push(display);
+   173				}
+   174			}
+   175			return parts.join(" + ");
+   176		};
+   177	
+   178		const handleKeyDown = (e: KeyboardEvent) => {
+   179			if (!isRecording()) return;
+   180	
+   181			e.preventDefault();
+   182			e.stopPropagation();
+   183	
+   184			const code = e.code;
+   185	
+   186			if (isModifierCode(code)) {
+   187				// A modifier key was pressed — show current modifier state
+   188				heldModifierCodes.add(code);
+   189				setPendingHotkey(buildModifierDisplay(heldModifierCodes));
+   190			} else {
+   191				// A non-modifier key was pressed — build a standard combo shortcut string
+   192				const modifiers: string[] = [];
+   193				const addedModifiers = new Set<string>();
+   194	
+   195				for (const mc of MOD_ORDER) {
+   196					if (heldModifierCodes.has(mc)) {
+   197						const modName = codeToComboModifier(mc);
+   198						if (modName && !addedModifiers.has(modName)) {
+   199							modifiers.push(modName);
+   200							addedModifiers.add(modName);
+   201						}
+   202					}
+   203				}
+   204	
+   205				const keyPart = keyEventToHotkeyKey(e);
+   206				const hotkeyString = [...modifiers, keyPart].join("+");
+   207				setPendingHotkey(hotkeyString);
+   208			}
+   209		};
+   210	
+   211		const handleKeyUp = async (e: KeyboardEvent) => {
+   212			if (!isRecording()) return;
+   213	
+   214			const code = e.code;
+   215	
+   216			if (isModifierCode(code)) {
+   217				const systemHotkey = modifierCodeToSystemHotkey(code);
+   218				if (systemHotkey && pendingSystemHotkey) {
+   219					heldModifierCodes.delete(code);
+   220					return;
+   221				}
+   222	
+   223				if (heldModifierCodes.size === 1 && heldModifierCodes.has(code) && systemHotkey) {
+   224					const success = await saveRecordedHotkey(systemHotkey);
+   225					if (success) {
+   226						finishRecording();
+   227					}
+   228					return;
+   229				}
+   230	
+   231				heldModifierCodes.delete(code);
+   232	
+   233				// When all modifiers are released without a combo, just reset display
+   234				if (heldModifierCodes.size === 0) {
+   235					setPendingHotkey("");
+   236				} else {
+   237					// Update display with remaining modifiers
+   238					setPendingHotkey(buildModifierDisplay(heldModifierCodes));
+   239				}
+   240			} else {
+   241				// A non-modifier key was released — check if we have a valid combo shortcut
+   242				const pending = pendingHotkey();
+   243				if (pending?.includes("+")) {
+   244					const success = await saveRecordedHotkey(pending);
+   245					if (success) {
+   246						finishRecording();
+   247					}
+   248				}
+   249			}
+   250		};
+   251	
+   252		const unlistenSystemPressedPromise = listen<SystemKeyPressedPayload>(
+   253			"system-key-pressed",
+   254			(event) => {
+   255				if (!isRecording()) return;
+   256	
+   257				pendingSystemHotkey = systemHotkeyFromKeys(event.payload.pressedKeys);
+   258				setPendingHotkey(hotkeyDisplayName(pendingSystemHotkey));
+   259			}
+   260		);
+   261	
+   262		const unlistenSystemReleasedPromise = listen("system-keys-released", () => {
+   263			if (!isRecording()) return;
+   264			if (!pendingSystemHotkey) return;
+   265	
+   266			const hotkey = pendingSystemHotkey;
+   267			void Result.tryPromise(() =>
+   268				saveRecordedHotkey(hotkey).then((success) => {
+   269					if (success) {
+   270						finishRecording();
+   271					}
+   272				})
+   273			);
+   274		});
+   275	
+   276		createEffect(() => {
+   277			if (isRecording()) {
+   278				resetTracking();
+   279				window.addEventListener("keydown", handleKeyDown);
+   280				window.addEventListener("keyup", handleKeyUp);
+   281			} else {
+   282				window.removeEventListener("keydown", handleKeyDown);
+   283				window.removeEventListener("keyup", handleKeyUp);
+   284			}
+   285		});
+   286	
+   287		onCleanup(() => {
+   288			window.removeEventListener("keydown", handleKeyDown);
+   289			window.removeEventListener("keyup", handleKeyUp);
+   290			if (activeRecordingId === recorderId) {
+   291				activeRecordingId = null;
+   292			}
+   293			setRecorderActive(false);
+   294			void Result.tryPromise(() => unlistenSystemPressedPromise.then((unlisten) => unlisten()));
+   295			void Result.tryPromise(() => unlistenSystemReleasedPromise.then((unlisten) => unlisten()));
+   296		});
+   297	
+   298		const startRecording = async () => {
+   299			if (activeRecordingId !== null && activeRecordingId !== recorderId) {
+   300				setError("Another hotkey is being recorded. Please finish or cancel it first.");
+   301				return;
+   302			}
+   303			if (isStartingWatcher) return;
+   304			isStartingWatcher = true;
+   305			const watcherStarted = await startSystemKeyWatcher();
+   306			isStartingWatcher = false;
+   307			if (Result.isError(watcherStarted)) {
+   308				setError(watcherStarted.error.message);
+   309				return;
+   310			}
+   311			activeRecordingId = recorderId;
+   312			setIsRecording(true);
+   313			setPendingHotkey("");
+   314			setError(null);
+   315			resetTracking();
+   316			setRecorderActive(true);
+   317		};
+   318	
+   319		const stopRecording = () => {
+   320			finishRecording();
+   321			setError(null);
+   322		};
+   323	
+   324		return {
+   325			isRecording,
+   326			pendingHotkey,
+   327			error,
+   328			startRecording,
+   329			stopRecording,
+   330			toggleRecording: () => {
+   331				if (isRecording()) {
+   332					stopRecording();
+   333				} else {
+   334					void startRecording();
+   335				}
+   336			},
+   337		};
+   338	}
+===== components/Navigation.tsx =====
+     1	import { A, useLocation } from "@solidjs/router";
+     2	import { BookOpen, Home, Settings, Wand2 } from "lucide-solid";
+     3	import { useI18n } from "../i18n";
+     4	import UpdateNotification from "./UpdateNotification";
+     5	
+     6	interface SidebarProps {
+     7		onOpenSettings: () => void;
+     8	}
+     9	
+    10	export default function Sidebar(props: SidebarProps) {
+    11		const [t] = useI18n();
+    12		const location = useLocation();
+    13	
+    14		const isActive = (path: string) =>
+    15			path === "/"
+    16				? location.pathname === path
+    17				: location.pathname === path || location.pathname.startsWith(`${path}/`);
+    18	
+    19		return (
+    20			<aside class="w-56 bg-th-base border-r border-border flex flex-col h-full">
+    21				<nav class="flex-1 p-3 pt-9 space-y-1">
+    22					<A
+    23						href="/"
+    24						class={`flex items-center gap-3 px-3 py-2 font-mono uppercase tracking-wider text-xs transition-colors ${
+    25							isActive("/")
+    26								? "text-ac border-l-2 border-ac bg-th-surface"
+    27								: "text-txt-secondary hover:text-txt-primary hover:bg-th-surface border-l-2 border-transparent"
+    28						}`}
+    29					>
+    30						<Home class="w-4 h-4" />
+    31						<span>01 {t("sidebar.home")}</span>
+    32					</A>
+    33					<A
+    34						href="/dictionary"
+    35						class={`flex items-center gap-3 px-3 py-2 font-mono uppercase tracking-wider text-xs transition-colors ${
+    36							isActive("/dictionary")
+    37								? "text-ac border-l-2 border-ac bg-th-surface"
+    38								: "text-txt-secondary hover:text-txt-primary hover:bg-th-surface border-l-2 border-transparent"
+    39						}`}
+    40					>
+    41						<BookOpen class="w-4 h-4" />
+    42						<span>02 {t("sidebar.dictionary")}</span>
+    43					</A>
+    44					<A
+    45						href="/style"
+    46						class={`flex items-center gap-3 px-3 py-2 font-mono uppercase tracking-wider text-xs transition-colors ${
+    47							isActive("/style")
+    48								? "text-ac border-l-2 border-ac bg-th-surface"
+    49								: "text-txt-secondary hover:text-txt-primary hover:bg-th-surface border-l-2 border-transparent"
+    50						}`}
+    51					>
+    52						<Wand2 class="w-4 h-4" />
+    53						<span>03 {t("sidebar.style")}</span>
+    54					</A>
+    55				</nav>
+    56	
+    57				<UpdateNotification />
+    58	
+    59				<div class="p-3 border-t border-border">
+    60					<button
+    61						type="button"
+    62						onClick={() => props.onOpenSettings()}
+    63						class="flex items-center gap-3 w-full px-3 py-2 font-mono uppercase tracking-wider text-xs text-txt-secondary hover:text-txt-primary hover:bg-th-surface transition-colors"
+    64					>
+    65						<Settings class="w-4 h-4 text-txt-secondary" />
+    66						<span>{t("sidebar.settings")}</span>
+    67					</button>
+    68				</div>
+    69			</aside>
+    70		);
+    71	}
+===== components/SettingsModal.tsx =====
+     1	import { getVersion } from "@tauri-apps/api/app";
+     2	import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+     3	import { Show, createEffect, createSignal } from "solid-js";
+     4	import { useHotkeyRecorder } from "../hooks/useHotkeyRecorder";
+     5	import { useI18n } from "../i18n";
+     6	import { validateHandsFreeHotkey, validateHoldToSpeakHotkey } from "../lib/hotkeyUtils";
+     7	import {
+     8		type AudioDevice,
+     9		getAudioInputDevices,
+    10		updateHoldToSpeakHotkey,
+    11		useSettings,
+    12	} from "../lib/settingsStore";
+    13	import AppearanceSettings from "./settings/AppearanceSettings";
+    14	import AudioSettings from "./settings/AudioSettings";
+    15	import HotkeySettings from "./settings/HotkeySettings";
+    16	import LanguageSettings from "./settings/LanguageSettings";
+    17	import ModelSettings from "./settings/ModelSettings";
+    18	import SettingsSidebar from "./settings/SettingsSidebar";
+    19	import type { SettingsSection } from "./settings/types";
+    20	
+    21	interface SettingsModalProps {
+    22		isOpen: boolean;
+    23		onClose: () => void;
+    24	}
+    25	
+    26	const sectionTitles: Record<SettingsSection, string> = {
+    27		audio: "// AUDIO_CONFIG",
+    28		model: "// MODEL_CONFIG",
+    29		hotkey: "// HOTKEY_CONFIG",
+    30		appearance: "// APPEARANCE_CONFIG",
+    31		language: "// LANGUAGE_CONFIG",
+    32	};
+    33	
+    34	export default function SettingsModal(props: SettingsModalProps) {
+    35		const [t, { locale, setLocale }] = useI18n();
+    36		const settings = useSettings();
+    37		const [activeSection, setActiveSection] = createSignal<SettingsSection>("audio");
+    38		const [audioDevices, setAudioDevices] = createSignal<AudioDevice[]>([]);
+    39		const [appVersion, setAppVersion] = createSignal("");
+    40		const [versionCopied, setVersionCopied] = createSignal(false);
+    41	
+    42		const {
+    43			isRecording: isRecordingHotkey,
+    44			pendingHotkey,
+    45			error: hotkeyError,
+    46			toggleRecording: toggleHotkeyRecording,
+    47		} = useHotkeyRecorder({
+    48			validator: validateHandsFreeHotkey,
+    49			recorderId: "settings-handsfree",
+    50		});
+    51		const {
+    52			isRecording: isRecordingHoldToSpeakHotkey,
+    53			pendingHotkey: pendingHoldToSpeakHotkey,
+    54			error: holdToSpeakHotkeyError,
+    55			toggleRecording: toggleHoldToSpeakHotkeyRecording,
+    56		} = useHotkeyRecorder({
+    57			onHotkeyRecorded: updateHoldToSpeakHotkey,
+    58			validator: validateHoldToSpeakHotkey,
+    59			recorderId: "settings-holdtospeak",
+    60		});
+    61	
+    62		const handleCopyVersion = async () => {
+    63			if (versionCopied()) return;
+    64			await writeText(appVersion());
+    65			setVersionCopied(true);
+    66			setTimeout(() => setVersionCopied(false), 1500);
+    67		};
+    68	
+    69		const fetchAudioDevices = async () => {
+    70			const devices = await getAudioInputDevices();
+    71			setAudioDevices(devices);
+    72		};
+    73	
+    74		createEffect(() => {
+    75			if (props.isOpen) {
+    76				fetchAudioDevices();
+    77				getVersion().then(setAppVersion);
+    78			}
+    79		});
+    80	
+    81		createEffect(() => {
+    82			if (!props.isOpen) return;
+    83	
+    84			const handleEscape = (e: KeyboardEvent) => {
+    85				if (e.key === "Escape" && !isRecordingHotkey() && !isRecordingHoldToSpeakHotkey()) {
+    86					props.onClose();
+    87				}
+    88			};
+    89	
+    90			window.addEventListener("keydown", handleEscape);
+    91			return () => window.removeEventListener("keydown", handleEscape);
+    92		});
+    93	
+    94		const handleOverlayClick = (e: MouseEvent) => {
+    95			if (e.target === e.currentTarget) {
+    96				props.onClose();
+    97			}
+    98		};
+    99	
+   100		return (
+   101			<Show when={props.isOpen}>
+   102				{/* biome-ignore lint/a11y/useKeyWithClickEvents: the overlay click mirrors Escape handling. */}
+   103				<div
+   104					class="fixed inset-0 bg-th-overlay flex items-center justify-center z-50"
+   105					onClick={handleOverlayClick}
+   106				>
+   107					<div class="bg-th-base border border-border w-[800px] h-[600px] flex overflow-hidden">
+   108						<SettingsSidebar
+   109							activeSection={activeSection()}
+   110							appVersion={appVersion()}
+   111							versionCopied={versionCopied()}
+   112							onSectionChange={setActiveSection}
+   113							onCopyVersion={handleCopyVersion}
+   114						/>
+   115	
+   116						<div class="flex-1 flex flex-col">
+   117							<div class="flex items-center justify-between px-6 py-4 border-b border-border">
+   118								<h3 class="font-mono text-txt-primary text-sm tracking-wider uppercase">
+   119									{sectionTitles[activeSection()]}
+   120								</h3>
+   121								<button
+   122									type="button"
+   123									onClick={props.onClose}
+   124									class="font-mono text-txt-muted hover:text-ac transition-colors text-sm"
+   125								>
+   126									[X]
+   127								</button>
+   128							</div>
+   129	
+   130							<div class="flex-1 overflow-auto p-6">
+   131								<Show when={activeSection() === "audio"}>
+   132									<AudioSettings
+   133										t={t}
+   134										settings={settings}
+   135										audioDevices={audioDevices()}
+   136										onRefreshDevices={fetchAudioDevices}
+   137									/>
+   138								</Show>
+   139								<Show when={activeSection() === "model"}>
+   140									<ModelSettings t={t} />
+   141								</Show>
+   142								<Show when={activeSection() === "hotkey"}>
+   143									<HotkeySettings
+   144										t={t}
+   145										settings={settings}
+   146										isRecordingHotkey={isRecordingHotkey()}
+   147										pendingHotkey={pendingHotkey()}
+   148										hotkeyError={hotkeyError()}
+   149										onToggleHotkeyRecording={toggleHotkeyRecording}
+   150										isRecordingHoldToSpeakHotkey={isRecordingHoldToSpeakHotkey()}
+   151										pendingHoldToSpeakHotkey={pendingHoldToSpeakHotkey()}
+   152										holdToSpeakHotkeyError={holdToSpeakHotkeyError()}
+   153										onToggleHoldToSpeakHotkeyRecording={toggleHoldToSpeakHotkeyRecording}
+   154									/>
+   155								</Show>
+   156								<Show when={activeSection() === "appearance"}>
+   157									<AppearanceSettings settings={settings} />
+   158								</Show>
+   159								<Show when={activeSection() === "language"}>
+   160									<LanguageSettings locale={locale()} setLocale={setLocale} />
+   161								</Show>
+   162							</div>
+   163	
+   164							<div class="px-6 py-3 border-t border-border">
+   165								<p class="font-mono text-[10px] text-txt-faint">
+   166									ESC TO CLOSE | CHANGES SAVED AUTOMATICALLY
+   167								</p>
+   168							</div>
+   169						</div>
+   170					</div>
+   171				</div>
+   172			</Show>
+   173		);
+   174	}
+===== components/AddSiteForm.tsx =====
+     1	import { Show, createEffect, createSignal, onCleanup } from "solid-js";
+     2	import { useI18n } from "../i18n";
+     3	import { preloadFavicons } from "../lib/favicons";
+     4	import SiteIcon from "./SiteIcon";
+     5	
+     6	const FAVICON_DEBOUNCE_MS = 400;
+     7	
+     8	export function normalizeDomain(input: string): string | null {
+     9		const trimmed = input.trim();
+    10		if (!trimmed) return null;
+    11		const withoutScheme = trimmed.includes("://") ? (trimmed.split("://")[1] ?? "") : trimmed;
+    12		const hostWithPort = withoutScheme.split("/")[0]?.split("?")[0]?.split("#")[0]?.split("@").pop();
+    13		if (!hostWithPort) return null;
+    14		const host = hostWithPort.split(":")[0]?.trim() ?? "";
+    15		if (!host) return null;
+    16		const lowered = host.toLowerCase().replace(/^\.+|\.+$/g, "");
+    17		if (!lowered) return null;
+    18		const stripped = lowered.startsWith("www.") ? lowered.slice(4) : lowered;
+    19		return stripped || null;
+    20	}
+    21	
+    22	interface AddSiteFormProps {
+    23		onAdd: (domain: string) => void | Promise<void>;
+    24	}
+    25	
+    26	export default function AddSiteForm(props: AddSiteFormProps) {
+    27		const [t] = useI18n();
+    28		const [input, setInput] = createSignal("");
+    29		const [error, setError] = createSignal<string | null>(null);
+    30		const [debouncedDomain, setDebouncedDomain] = createSignal<string | null>(null);
+    31	
+    32		createEffect(() => {
+    33			const value = input();
+    34			const normalized = normalizeDomain(value);
+    35			if (!normalized) {
+    36				setDebouncedDomain(null);
+    37				return;
+    38			}
+    39			const timer = setTimeout(() => {
+    40				setDebouncedDomain(normalized);
+    41				preloadFavicons([normalized]);
+    42			}, FAVICON_DEBOUNCE_MS);
+    43			onCleanup(() => clearTimeout(timer));
+    44		});
+    45	
+    46		const handleAdd = async () => {
+    47			const normalized = normalizeDomain(input());
+    48			if (!normalized) {
+    49				setError(t("dictionary.sitesInvalidDomain"));
+    50				return;
+    51			}
+    52			setError(null);
+    53			setInput("");
+    54			await props.onAdd(normalized);
+    55		};
+    56	
+    57		const handleKeyDown = (e: KeyboardEvent) => {
+    58			if (e.key === "Enter") handleAdd();
+    59		};
+    60	
+    61		return (
+    62			<div class="mb-6 bg-th-surface border border-border p-4 space-y-3">
+    63				<div class="flex items-center gap-3">
+    64					<SiteIcon domain={debouncedDomain()} sizeClass="w-5 h-5" />
+    65					<input
+    66						type="text"
+    67						value={input()}
+    68						onInput={(e) => {
+    69							setInput(e.currentTarget.value);
+    70							if (error()) setError(null);
+    71						}}
+    72						onKeyDown={handleKeyDown}
+    73						placeholder={t("dictionary.sitesDomainPlaceholder")}
+    74						class="flex-1 bg-transparent text-txt-primary font-mono placeholder-txt-muted focus:outline-none"
+    75					/>
+    76					<button
+    77						type="button"
+    78						onClick={handleAdd}
+    79						disabled={!input().trim()}
+    80						class="flex items-center gap-1 px-3 py-1.5 bg-ac text-ac-on font-mono uppercase tracking-wider text-xs hover:bg-ac-hover disabled:opacity-50 transition-colors"
+    81					>
+    82						<span>+</span>
+    83						{t("dictionary.sitesAddSite")}
+    84					</button>
+    85				</div>
+    86				<Show when={error()}>
+    87					<div class="flex justify-end">
+    88						<span class="text-ac font-mono text-xs">{error()}</span>
+    89					</div>
+    90				</Show>
+    91			</div>
+    92		);
+    93	}
+===== components/DotMatrixSpinner.tsx =====
+     1	import { For } from "solid-js";
+     2	
+     3	const MATRIX_SIZE = 5;
+     4	const CENTER = Math.floor(MATRIX_SIZE / 2);
+     5	const RING_PATH: readonly number[] = [1, 2, 3, 9, 14, 19, 23, 22, 21, 15, 10, 5];
+     6	
+     7	const DOTS = Array.from({ length: MATRIX_SIZE * MATRIX_SIZE }, (_, index) => {
+     8		const row = Math.floor(index / MATRIX_SIZE);
+     9		const col = index % MATRIX_SIZE;
+    10		const distance = Math.hypot(row - CENTER, col - CENTER);
+    11		const ringOrder = RING_PATH.indexOf(index);
+    12	
+    13		return {
+    14			isCenter: row === CENTER && col === CENTER,
+    15			isVisible: distance <= CENTER,
+    16			ringOrder,
+    17		};
+    18	});
+    19	
+    20	type DotMatrixSpinnerProps = {
+    21		size?: number;
+    22		dotSize?: number;
+    23		cycleMs?: number;
+    24		class?: string;
+    25	};
+    26	
+    27	export default function DotMatrixSpinner(props: DotMatrixSpinnerProps) {
+    28		const size = () => props.size ?? 14;
+    29		const dotSize = () => props.dotSize ?? 2;
+    30		const cycleMs = () => props.cycleMs ?? 1200;
+    31		const gap = () => (size() - dotSize() * MATRIX_SIZE) / (MATRIX_SIZE - 1);
+    32	
+    33		return (
+    34			<output
+    35				aria-label="Loading"
+    36				class={props.class}
+    37				style={{
+    38					display: "grid",
+    39					"grid-template-columns": `repeat(${MATRIX_SIZE}, ${dotSize()}px)`,
+    40					"grid-template-rows": `repeat(${MATRIX_SIZE}, ${dotSize()}px)`,
+    41					gap: `${gap()}px`,
+    42					width: `${size()}px`,
+    43					height: `${size()}px`,
+    44				}}
+    45			>
+    46				<For each={DOTS}>
+    47					{(dot) => (
+    48						<div
+    49							style={{
+    50								"border-radius": "9999px",
+    51								"background-color": "currentColor",
+    52								opacity: dot.isVisible ? (dot.isCenter ? 0.18 : 0.08) : 0,
+    53								...(dot.ringOrder >= 0
+    54									? {
+    55											"animation-name": "dotm-circular-2",
+    56											"animation-duration": `${cycleMs()}ms`,
+    57											"animation-timing-function": "steps(12, end)",
+    58											"animation-iteration-count": "infinite",
+    59											"animation-delay": `${(dot.ringOrder / RING_PATH.length) * cycleMs()}ms`,
+    60										}
+    61									: {}),
+    62							}}
+    63						/>
+    64					)}
+    65				</For>
+    66			</output>
+    67		);
+    68	}
+===== components/SiteIcon.tsx =====
+     1	import { Globe } from "lucide-solid";
+     2	import { Show, createEffect, createMemo, createSignal } from "solid-js";
+     3	import { getFaviconUrl } from "../lib/favicons";
+     4	
+     5	interface SiteIconProps {
+     6		domain: string | null;
+     7		sizeClass: string;
+     8	}
+     9	
+    10	export default function SiteIcon(props: SiteIconProps) {
+    11		const [failed, setFailed] = createSignal(false);
+    12		const activeDomain = createMemo(() => (failed() ? null : props.domain));
+    13	
+    14		createEffect(() => {
+    15			props.domain;
+    16			setFailed(false);
+    17		});
+    18	
+    19		return (
+    20			<div
+    21				class={`${props.sizeClass} shrink-0 bg-th-input border border-border flex items-center justify-center overflow-hidden`}
+    22			>
+    23				<Show when={activeDomain()} fallback={<Globe class="w-3.5 h-3.5 text-txt-muted" />}>
+    24					{(domain) => (
+    25						<img
+    26							src={getFaviconUrl(domain())}
+    27							alt={domain()}
+    28							class="w-full h-full"
+    29							draggable={false}
+    30							onError={() => setFailed(true)}
+    31						/>
+    32					)}
+    33				</Show>
+    34			</div>
+    35		);
+    36	}
+===== components/StyleSelect.tsx =====
+     1	import { ChevronDown } from "lucide-solid";
+     2	import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
+     3	import { type AppStyle, STYLE_LIST } from "../lib/commands/apps";
+     4	
+     5	interface StyleSelectProps {
+     6		value: AppStyle;
+     7		labelFor: (style: AppStyle) => string;
+     8		onChange: (style: AppStyle) => void;
+     9	}
+    10	
+    11	export default function StyleSelect(props: StyleSelectProps) {
+    12		const [open, setOpen] = createSignal(false);
+    13		const [highlighted, setHighlighted] = createSignal(0);
+    14		let containerRef: HTMLDivElement | undefined;
+    15		let buttonRef: HTMLButtonElement | undefined;
+    16	
+    17		const handleClickOutside = (e: MouseEvent) => {
+    18			if (containerRef && !containerRef.contains(e.target as Node)) {
+    19				setOpen(false);
+    20			}
+    21		};
+    22	
+    23		createEffect(() => {
+    24			if (open()) {
+    25				document.addEventListener("click", handleClickOutside);
+    26				setHighlighted(Math.max(0, STYLE_LIST.indexOf(props.value)));
+    27			} else {
+    28				document.removeEventListener("click", handleClickOutside);
+    29			}
+    30		});
+    31	
+    32		onCleanup(() => {
+    33			document.removeEventListener("click", handleClickOutside);
+    34		});
+    35	
+    36		const handleKeyDown = (e: KeyboardEvent) => {
+    37			if (e.key === "ArrowDown") {
+    38				e.preventDefault();
+    39				if (!open()) {
+    40					setOpen(true);
+    41					return;
+    42				}
+    43				setHighlighted((i) => Math.min(STYLE_LIST.length - 1, i + 1));
+    44			} else if (e.key === "ArrowUp") {
+    45				e.preventDefault();
+    46				if (!open()) {
+    47					setOpen(true);
+    48					return;
+    49				}
+    50				setHighlighted((i) => Math.max(0, i - 1));
+    51			} else if (e.key === "Enter" || e.key === " ") {
+    52				if (!open()) {
+    53					e.preventDefault();
+    54					setOpen(true);
+    55					return;
+    56				}
+    57				e.preventDefault();
+    58				const choice = STYLE_LIST[highlighted()];
+    59				if (choice) {
+    60					props.onChange(choice);
+    61					setOpen(false);
+    62					buttonRef?.focus();
+    63				}
+    64			} else if (e.key === "Escape") {
+    65				if (!open()) return;
+    66				e.preventDefault();
+    67				setOpen(false);
+    68				buttonRef?.focus();
+    69			}
+    70		};
+    71	
+    72		return (
+    73			<div ref={containerRef} class="relative w-40 shrink-0">
+    74				<button
+    75					type="button"
+    76					ref={buttonRef}
+    77					onClick={() => setOpen(!open())}
+    78					onKeyDown={handleKeyDown}
+    79					class="flex items-center justify-between w-full px-3 py-1.5 bg-th-input border border-border-strong text-txt-primary hover:border-ac focus:outline-none focus:border-ac transition-colors font-mono text-xs uppercase tracking-wider"
+    80				>
+    81					<span class="truncate">{props.labelFor(props.value)}</span>
+    82					<ChevronDown
+    83						class={`w-3 h-3 ml-2 text-txt-muted transition-transform ${open() ? "rotate-180" : ""}`}
+    84					/>
+    85				</button>
+    86				<Show when={open()}>
+    87					<div class="absolute z-40 right-0 w-full mt-1 bg-th-surface border border-border-strong">
+    88						<For each={STYLE_LIST}>
+    89							{(style, index) => (
+    90								<button
+    91									type="button"
+    92									onClick={() => {
+    93										props.onChange(style);
+    94										setOpen(false);
+    95										buttonRef?.focus();
+    96									}}
+    97									onMouseEnter={() => setHighlighted(index())}
+    98									class={`flex items-center justify-between w-full px-3 py-1.5 text-left transition-colors font-mono text-xs uppercase tracking-wider ${
+    99										highlighted() === index() ? "bg-th-hover" : ""
+   100									} ${style === props.value ? "text-ac" : "text-txt-primary"}`}
+   101								>
+   102									<span class="truncate">{props.labelFor(style)}</span>
+   103									<Show when={style === props.value}>
+   104										<span class="text-ac">[*]</span>
+   105									</Show>
+   106								</button>
+   107							)}
+   108						</For>
+   109					</div>
+   110				</Show>
+   111			</div>
+   112		);
+   113	}
+===== components/ToggleOption.tsx =====
+     1	interface ToggleOptionProps {
+     2		label: string;
+     3		description: string;
+     4		isEnabled: boolean;
+     5		onChange: (enabled: boolean) => void;
+     6	}
+     7	
+     8	export default function ToggleOption(props: ToggleOptionProps) {
+     9		return (
+    10			<div class="flex items-center justify-between gap-4">
+    11				<div class="flex-1">
+    12					<div class="font-mono text-txt-muted text-xs uppercase tracking-wider mb-1">
+    13						{props.label}
+    14					</div>
+    15					<p class="font-mono text-xs text-txt-faint">{props.description}</p>
+    16				</div>
+    17				<button
+    18					type="button"
+    19					role="switch"
+    20					aria-checked={props.isEnabled}
+    21					onClick={() => props.onChange(!props.isEnabled)}
+    22					class={`relative inline-flex items-center h-6 w-11 border transition-colors ${
+    23						props.isEnabled ? "bg-ac border-ac" : "bg-th-surface border-border-strong"
+    24					}`}
+    25				>
+    26					<span
+    27						class={`inline-block w-4 h-4 transition-transform ${
+    28							props.isEnabled ? "translate-x-6 bg-ac-on" : "translate-x-1 bg-txt-muted"
+    29						}`}
+    30					/>
+    31				</button>
+    32			</div>
+    33		);
+    34	}
+===== components/TranscriptionCard.tsx =====
+     1	import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+     2	import { Check, Copy } from "lucide-solid";
+     3	import { Show, createSignal } from "solid-js";
+     4	import { useI18n } from "../i18n";
+     5	import { capture } from "../lib/posthog";
+     6	
+     7	type Transcription = {
+     8		id: string;
+     9		text: string;
+    10		processing_time_ms: number;
+    11		audio_duration_ms: number | null;
+    12		created_at: string;
+    13	};
+    14	
+    15	type Props = {
+    16		transcription: Transcription;
+    17	};
+    18	
+    19	export default function TranscriptionCard(props: Props) {
+    20		const [t, { locale }] = useI18n();
+    21		const [copied, setCopied] = createSignal(false);
+    22		const [isHovered, setIsHovered] = createSignal(false);
+    23	
+    24		const handleCopy = async () => {
+    25			await writeText(props.transcription.text);
+    26			capture("transcription_copied", {
+    27				transcription_id: props.transcription.id,
+    28				text_length: props.transcription.text.length,
+    29			});
+    30			setCopied(true);
+    31			setTimeout(() => setCopied(false), 2000);
+    32		};
+    33	
+    34		const formatProcessingTime = (ms: number) => {
+    35			return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+    36		};
+    37	
+    38		const formatTime = (dateStr: string) => {
+    39			const date = new Date(dateStr);
+    40			return date.toLocaleTimeString(locale(), {
+    41				hour: "2-digit",
+    42				minute: "2-digit",
+    43			});
+    44		};
+    45	
+    46		const truncateText = (text: string, maxLength = 150) => {
+    47			if (text.length <= maxLength) return text;
+    48			return `${text.slice(0, maxLength)}...`;
+    49		};
+    50	
+    51		return (
+    52			<div
+    53				class="group relative p-3 hover:bg-th-hover"
+    54				onMouseEnter={() => setIsHovered(true)}
+    55				onMouseLeave={() => setIsHovered(false)}
+    56			>
+    57				<p class="text-txt-primary font-mono text-sm leading-relaxed mb-2">
+    58					{truncateText(props.transcription.text)}
+    59				</p>
+    60	
+    61				<div class="flex items-center gap-3 text-txt-muted font-mono text-xs">
+    62					<span>{formatTime(props.transcription.created_at)}</span>
+    63					<span>{formatProcessingTime(props.transcription.processing_time_ms)}</span>
+    64				</div>
+    65	
+    66				<Show when={isHovered() || copied()}>
+    67					<button
+    68						type="button"
+    69						onClick={handleCopy}
+    70						class="absolute top-2 right-2 p-1.5 bg-th-base border border-border-strong hover:border-ac text-txt-secondary transition-colors"
+    71						title={copied() ? t("transcription.copied") : t("transcription.copy")}
+    72					>
+    73						<Show when={copied()} fallback={<Copy class="w-3.5 h-3.5" />}>
+    74							<Check class="w-3.5 h-3.5 text-success" />
+    75						</Show>
+    76					</button>
+    77				</Show>
+    78			</div>
+    79		);
+    80	}
+===== components/TranscriptionList.tsx =====
+     1	import { type UnlistenFn, listen } from "@tauri-apps/api/event";
+     2	import { Result } from "better-result";
+     3	import { Loader } from "lucide-solid";
+     4	import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+     5	import { useI18n } from "../i18n";
+     6	import { type Transcription, listTranscriptions } from "../lib/commands/transcriptions";
+     7	import { capture } from "../lib/posthog";
+     8	import TranscriptionCard from "./TranscriptionCard";
+     9	
+    10	type GroupedTranscriptions = {
+    11		label: string;
+    12		transcriptions: Transcription[];
+    13	};
+    14	
+    15	export default function TranscriptionList() {
+    16		const [t, { locale }] = useI18n();
+    17		const [transcriptions, setTranscriptions] = createSignal<Transcription[]>([]);
+    18		const [loading, setLoading] = createSignal(false);
+    19		const [initialLoading, setInitialLoading] = createSignal(true);
+    20		const [nextCursor, setNextCursor] = createSignal<string | null>(null);
+    21		const [hasMore, setHasMore] = createSignal(true);
+    22		const [error, setError] = createSignal<string | null>(null);
+    23	
+    24		const [sentinelRef, setSentinelRef] = createSignal<HTMLDivElement | null>(null);
+    25		let observer: IntersectionObserver | null = null;
+    26		let unlisten: UnlistenFn | null = null;
+    27	
+    28		const getDateLabel = (dateStr: string): string => {
+    29			const date = new Date(dateStr);
+    30			const today = new Date();
+    31			const yesterday = new Date(today);
+    32			yesterday.setDate(yesterday.getDate() - 1);
+    33	
+    34			const isToday =
+    35				date.getDate() === today.getDate() &&
+    36				date.getMonth() === today.getMonth() &&
+    37				date.getFullYear() === today.getFullYear();
+    38	
+    39			const isYesterday =
+    40				date.getDate() === yesterday.getDate() &&
+    41				date.getMonth() === yesterday.getMonth() &&
+    42				date.getFullYear() === yesterday.getFullYear();
+    43	
+    44			if (isToday) {
+    45				return t("transcriptionList.today");
+    46			}
+    47			if (isYesterday) {
+    48				return t("transcriptionList.yesterday");
+    49			}
+    50	
+    51			return date.toLocaleDateString(locale(), {
+    52				weekday: "long",
+    53				month: "long",
+    54				day: "numeric",
+    55			});
+    56		};
+    57	
+    58		const groupedTranscriptions = createMemo((): GroupedTranscriptions[] => {
+    59			const groups: Map<string, Transcription[]> = new Map();
+    60	
+    61			for (const transcription of transcriptions()) {
+    62				const label = getDateLabel(transcription.created_at);
+    63				const existing = groups.get(label) ?? [];
+    64				groups.set(label, [...existing, transcription]);
+    65			}
+    66	
+    67			return Array.from(groups.entries()).map(([label, items]) => ({
+    68				label,
+    69				transcriptions: items,
+    70			}));
+    71		});
+    72	
+    73		const fetchTranscriptions = async (cursor?: string) => {
+    74			if (loading()) return;
+    75	
+    76			setLoading(true);
+    77			setError(null);
+    78	
+    79			const result = await listTranscriptions(20, cursor || null);
+    80			if (Result.isError(result)) {
+    81				setError(result.error.message || t("transcriptionList.errorOccurred"));
+    82				setLoading(false);
+    83				setInitialLoading(false);
+    84				return;
+    85			}
+    86	
+    87			const items = result.value.transcriptions ?? [];
+    88			const lastItem = items[items.length - 1];
+    89	
+    90			setTranscriptions((prev) => (cursor ? [...prev, ...items] : items));
+    91			setNextCursor(lastItem?.created_at ?? null);
+    92			setHasMore(result.value.has_more ?? false);
+    93			setLoading(false);
+    94			setInitialLoading(false);
+    95		};
+    96	
+    97		onMount(async () => {
+    98			fetchTranscriptions();
+    99	
+   100			unlisten = await listen("transcription-created", () => {
+   101				capture("transcription_created");
+   102				fetchTranscriptions();
+   103			});
+   104		});
+   105	
+   106		createEffect(() => {
+   107			const sentinel = sentinelRef();
+   108	
+   109			if (observer) {
+   110				observer.disconnect();
+   111				observer = null;
+   112			}
+   113	
+   114			if (!sentinel) return;
+   115	
+   116			observer = new IntersectionObserver(
+   117				(entries) => {
+   118					const entry = entries[0];
+   119					if (entry?.isIntersecting && hasMore() && !loading() && nextCursor()) {
+   120						fetchTranscriptions(nextCursor()!);
+   121					}
+   122				},
+   123				{ rootMargin: "100px" }
+   124			);
+   125	
+   126			observer.observe(sentinel);
+   127		});
+   128	
+   129		onCleanup(() => {
+   130			observer?.disconnect();
+   131			unlisten?.();
+   132		});
+   133	
+   134		return (
+   135			<div class="space-y-6">
+   136				<Show when={initialLoading()}>
+   137					<div class="flex items-center justify-center py-12">
+   138						<Loader class="w-6 h-6 animate-spin text-ac" />
+   139					</div>
+   140				</Show>
+   141	
+   142				<Show when={error()}>
+   143					<div class="text-center py-8 font-mono">
+   144						<p class="text-ac mb-2">[ERROR] {error()}</p>
+   145						<button
+   146							type="button"
+   147							onClick={() => fetchTranscriptions()}
+   148							class="text-ac hover:underline"
+   149						>
+   150							[RETRY]
+   151						</button>
+   152					</div>
+   153				</Show>
+   154	
+   155				<Show when={!initialLoading() && !error() && transcriptions().length === 0}>
+   156					<div class="text-center py-12 font-mono">
+   157						<p class="text-txt-secondary mb-2">[INFO] NO_TRANSCRIPTIONS</p>
+   158						<p class="text-txt-muted text-sm">{t("transcriptionList.useCommandToRecord")}</p>
+   159					</div>
+   160				</Show>
+   161	
+   162				<Show when={!initialLoading() && transcriptions().length > 0}>
+   163					<For each={groupedTranscriptions()}>
+   164						{(group) => (
+   165							<div>
+   166								<h3 class="text-ac font-mono text-xs uppercase tracking-wider mb-2 px-1">
+   167									{group.label}
+   168								</h3>
+   169								<div class="bg-th-surface border border-border divide-y divide-border">
+   170									<For each={group.transcriptions}>
+   171										{(transcription) => <TranscriptionCard transcription={transcription} />}
+   172									</For>
+   173								</div>
+   174							</div>
+   175						)}
+   176					</For>
+   177	
+   178					<div ref={setSentinelRef} class="h-4" />
+   179	
+   180					<Show when={loading() && transcriptions().length > 0}>
+   181						<div class="flex items-center justify-center py-4">
+   182							<Loader class="w-5 h-5 animate-spin text-ac" />
+   183						</div>
+   184					</Show>
+   185	
+   186					<Show when={!hasMore() && transcriptions().length > 0}>
+   187						<p class="text-center text-txt-muted font-mono text-xs py-4">
+   188							{t("transcriptionList.noMore")}
+   189						</p>
+   190					</Show>
+   191				</Show>
+   192			</div>
+   193		);
+   194	}
+===== components/UpdateNotification.tsx =====
+     1	import { listen } from "@tauri-apps/api/event";
+     2	import { relaunch } from "@tauri-apps/plugin-process";
+     3	import { type Update, check } from "@tauri-apps/plugin-updater";
+     4	import { Result } from "better-result";
+     5	import { Download } from "lucide-solid";
+     6	import { Show, createSignal, onCleanup, onMount } from "solid-js";
+     7	import { useI18n } from "../i18n";
+     8	import { errorFields, logDiagnostic } from "../lib/diagnostics";
+     9	
+    10	const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+    11	
+    12	export default function UpdateNotification() {
+    13		const [t] = useI18n();
+    14		const [update, setUpdate] = createSignal<Update | null>(null);
+    15		const [isVisible, setIsVisible] = createSignal(false);
+    16		const [isDownloading, setIsDownloading] = createSignal(false);
+    17		const [downloadProgress, setDownloadProgress] = createSignal(0);
+    18		let isCheckingForUpdates = false;
+    19	
+    20		const checkForUpdates = async () => {
+    21			if (isCheckingForUpdates || isDownloading()) {
+    22				logDiagnostic("debug", "updater", "check_skipped", {
+    23					isCheckingForUpdates,
+    24					isDownloading: isDownloading(),
+    25				});
+    26				return;
+    27			}
+    28	
+    29			isCheckingForUpdates = true;
+    30			const startedAt = Date.now();
+    31			logDiagnostic("debug", "updater", "check_started");
+    32			try {
+    33				const available = await Result.tryPromise(() => check());
+    34				if (Result.isOk(available) && available.value) {
+    35					logDiagnostic("info", "updater", "update_available", {
+    36						version: available.value.version,
+    37						elapsedMs: Date.now() - startedAt,
+    38					});
+    39					setUpdate(available.value);
+    40					setIsVisible(true);
+    41				} else if (Result.isOk(available)) {
+    42					logDiagnostic("debug", "updater", "no_update", {
+    43						elapsedMs: Date.now() - startedAt,
+    44					});
+    45					setUpdate(null);
+    46					setIsVisible(false);
+    47				} else {
+    48					logDiagnostic("error", "updater", "check_failed", {
+    49						elapsedMs: Date.now() - startedAt,
+    50						error: errorFields(available.error),
+    51					});
+    52				}
+    53			} finally {
+    54				isCheckingForUpdates = false;
+    55			}
+    56		};
+    57	
+    58		onMount(() => {
+    59			void checkForUpdates();
+    60			const intervalId = window.setInterval(() => {
+    61				void checkForUpdates();
+    62			}, UPDATE_CHECK_INTERVAL_MS);
+    63	
+    64			let cleanup: (() => void) | undefined;
+    65			let disposed = false;
+    66			void listen("check-for-updates", () => {
+    67				void checkForUpdates();
+    68			}).then((unlisten) => {
+    69				if (disposed) {
+    70					unlisten();
+    71				} else {
+    72					cleanup = unlisten;
+    73				}
+    74			});
+    75	
+    76			onCleanup(() => {
+    77				disposed = true;
+    78				window.clearInterval(intervalId);
+    79				cleanup?.();
+    80			});
+    81		});
+    82	
+    83		const handleDownloadAndRestart = async () => {
+    84			const updateInfo = update();
+    85			if (!updateInfo) return;
+    86	
+    87			logDiagnostic("info", "updater", "download_and_restart_requested", {
+    88				version: updateInfo.version,
+    89			});
+    90			setIsDownloading(true);
+    91			let downloadedBytes = 0;
+    92			const installed = await Result.tryPromise({
+    93				try: async () => {
+    94					await updateInfo.downloadAndInstall((event) => {
+    95						if (event.event === "Started" && event.data.contentLength) {
+    96							downloadedBytes = 0;
+    97							logDiagnostic("info", "updater", "download_started", {
+    98								version: updateInfo.version,
+    99								contentLength: event.data.contentLength,
+   100							});
+   101							setDownloadProgress(0);
+   102						} else if (event.event === "Progress") {
+   103							downloadedBytes += event.data.chunkLength;
+   104							const progress = downloadProgress() + event.data.chunkLength;
+   105							setDownloadProgress(progress);
+   106						} else if (event.event === "Finished") {
+   107							logDiagnostic("info", "updater", "download_finished", {
+   108								version: updateInfo.version,
+   109								downloadedBytes,
+   110							});
+   111							setDownloadProgress(100);
+   112						}
+   113					});
+   114					logDiagnostic("warn", "updater", "relaunch_requested", {
+   115						version: updateInfo.version,
+   116					});
+   117					await relaunch();
+   118				},
+   119				catch: (cause) => cause,
+   120			});
+   121			if (Result.isError(installed)) {
+   122				logDiagnostic("error", "updater", "download_or_install_failed", {
+   123					version: updateInfo.version,
+   124					error: errorFields(installed.error),
+   125				});
+   126				setIsDownloading(false);
+   127			}
+   128		};
+   129	
+   130		return (
+   131			<Show when={isVisible() && update()}>
+   132				<div class="border-t border-border">
+   133					<div class="px-6 py-3">
+   134						<div class="mb-1.5">
+   135							<span class="font-mono uppercase tracking-wider text-[10px] text-ac flex items-center gap-1.5">
+   136								<Download class="h-2.5 w-2.5" />
+   137								{t("update.available")}
+   138							</span>
+   139						</div>
+   140	
+   141						<div class="font-mono text-xs tabular-nums mb-2">
+   142							<span class="text-txt-primary">v{update()?.version}</span>
+   143						</div>
+   144	
+   145						<Show
+   146							when={!isDownloading()}
+   147							fallback={
+   148								<>
+   149									<div class="w-full h-1 bg-border overflow-hidden">
+   150										<div
+   151											class="h-full bg-ac transition-all duration-300"
+   152											style={{ width: `${Math.min(downloadProgress() / 10, 100)}%` }}
+   153										/>
+   154									</div>
+   155									<p class="mt-1.5 font-mono uppercase tracking-wider text-[10px] text-txt-muted">
+   156										{t("update.downloading")}
+   157									</p>
+   158								</>
+   159							}
+   160						>
+   161							<button
+   162								type="button"
+   163								onClick={handleDownloadAndRestart}
+   164								class="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 font-mono uppercase tracking-wider text-[10px] border border-ac text-ac hover:bg-ac hover:text-ac-on transition-colors"
+   165							>
+   166								<span aria-hidden="true">→</span>
+   167								{t("update.downloadAndRestart")}
+   168							</button>
+   169						</Show>
+   170					</div>
+   171				</div>
+   172			</Show>
+   173		);
+   174	}

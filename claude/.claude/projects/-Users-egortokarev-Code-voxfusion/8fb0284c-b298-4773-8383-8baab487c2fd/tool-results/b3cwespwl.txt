@@ -1,0 +1,912 @@
+===== components/settings/AppearanceSettings.tsx =====
+     1	import { type Accessor, For } from "solid-js";
+     2	import { capture } from "../../lib/posthog";
+     3	import type { Settings, Theme } from "../../lib/settingsStore";
+     4	import { updateTheme } from "../../lib/settingsStore";
+     5	import ThemeOption from "./ThemeOption";
+     6	
+     7	interface AppearanceSettingsProps {
+     8		settings: Accessor<Settings>;
+     9	}
+    10	
+    11	const themeOptions: { value: Theme; label: string }[] = [
+    12		{ value: "light", label: "LIGHT" },
+    13		{ value: "dark", label: "DARK" },
+    14		{ value: "system", label: "SYSTEM" },
+    15	];
+    16	
+    17	export default function AppearanceSettings(props: AppearanceSettingsProps) {
+    18		return (
+    19			<div class="space-y-6">
+    20				<div>
+    21					<div class="font-mono text-txt-muted text-xs uppercase tracking-wider block mb-4">
+    22						THEME_MODE
+    23					</div>
+    24					<div class="grid grid-cols-3 gap-4">
+    25						<For each={themeOptions}>
+    26							{(theme) => (
+    27								<ThemeOption
+    28									value={theme.value}
+    29									label={theme.label}
+    30									isSelected={props.settings().theme === theme.value}
+    31									onClick={() => {
+    32										capture("settings_theme_changed", { theme: theme.value });
+    33										updateTheme(theme.value);
+    34									}}
+    35								/>
+    36							)}
+    37						</For>
+    38					</div>
+    39				</div>
+    40			</div>
+    41		);
+    42	}
+===== components/settings/AudioSettings.tsx =====
+     1	import { RefreshCw } from "lucide-solid";
+     2	import { createSignal, onCleanup, type Accessor } from "solid-js";
+     3	import type { I18nContextType } from "../../i18n";
+     4	import { capture } from "../../lib/posthog";
+     5	import type { AudioDevice, Settings } from "../../lib/settingsStore";
+     6	import { updateMicrophone, updateMuteMediaWhileRecording } from "../../lib/settingsStore";
+     7	import ToggleOption from "../ToggleOption";
+     8	import Select from "./Select";
+     9	import type { SelectOption } from "./types";
+    10	
+    11	interface AudioSettingsProps {
+    12		t: I18nContextType[0];
+    13		settings: Accessor<Settings>;
+    14		audioDevices: AudioDevice[];
+    15		onRefreshDevices: () => void;
+    16	}
+    17	
+    18	const REFRESH_ANIMATION_MS = 600;
+    19	
+    20	export default function AudioSettings(props: AudioSettingsProps) {
+    21		const [isRefreshAnimating, setIsRefreshAnimating] = createSignal(false);
+    22		let refreshAnimationTimeout: ReturnType<typeof setTimeout> | undefined;
+    23	
+    24		const microphoneOptions = (): SelectOption[] => {
+    25			const defaultDevice = props.audioDevices.find((d) => d.isDefault);
+    26			const otherDevices = props.audioDevices.filter((d) => !d.isDefault);
+    27	
+    28			return [
+    29				{
+    30					value: "default",
+    31					label: defaultDevice
+    32						? `${props.t("settings.defaultMicrophone")} (${defaultDevice.name})`
+    33						: props.t("settings.defaultMicrophone"),
+    34				},
+    35				...otherDevices.map((device) => ({
+    36					value: device.name,
+    37					label: device.name,
+    38				})),
+    39			];
+    40		};
+    41	
+    42		const handleRefreshDevices = () => {
+    43			if (isRefreshAnimating()) return;
+    44	
+    45			setIsRefreshAnimating(true);
+    46			props.onRefreshDevices();
+    47			refreshAnimationTimeout = setTimeout(() => {
+    48				setIsRefreshAnimating(false);
+    49				refreshAnimationTimeout = undefined;
+    50			}, REFRESH_ANIMATION_MS);
+    51		};
+    52	
+    53		onCleanup(() => {
+    54			clearTimeout(refreshAnimationTimeout);
+    55		});
+    56	
+    57		return (
+    58			<div class="space-y-6">
+    59				<div>
+    60					<div class="flex items-center justify-between mb-3">
+    61						<div class="font-mono text-txt-muted text-xs uppercase tracking-wider">INPUT_DEVICE</div>
+    62						<button
+    63							type="button"
+    64							onClick={handleRefreshDevices}
+    65							disabled={isRefreshAnimating()}
+    66							class="p-1.5 text-txt-muted hover:text-ac transition-colors disabled:opacity-50"
+    67							title="Refresh devices"
+    68						>
+    69							<RefreshCw
+    70								class={`w-4 h-4 ${isRefreshAnimating() ? "animate-refresh-devices-once" : ""}`}
+    71							/>
+    72						</button>
+    73					</div>
+    74					<Select
+    75						value={props.settings().selectedMicrophoneId ?? "default"}
+    76						options={microphoneOptions()}
+    77						onChange={(value) => {
+    78							capture("settings_microphone_changed");
+    79							updateMicrophone(value === "default" ? null : value);
+    80						}}
+    81					/>
+    82					<p class="mt-3 font-mono text-xs text-txt-faint">
+    83						{props.t("settings.microphoneDescription")}
+    84					</p>
+    85				</div>
+    86	
+    87				<ToggleOption
+    88					label={props.t("settings.muteMediaWhileRecording")}
+    89					description={props.t("settings.muteMediaWhileRecordingDescription")}
+    90					isEnabled={props.settings().muteMediaWhileRecording}
+    91					onChange={(enabled) => {
+    92						capture("settings_mute_media_while_recording_changed", { enabled });
+    93						updateMuteMediaWhileRecording(enabled);
+    94					}}
+    95				/>
+    96			</div>
+    97		);
+    98	}
+===== components/settings/HotkeySettings.tsx =====
+     1	import { Show, type Accessor } from "solid-js";
+     2	import type { I18nContextType } from "../../i18n";
+     3	import { hotkeyDisplayName } from "../../lib/hotkeyUtils";
+     4	import type { Settings } from "../../lib/settingsStore";
+     5	
+     6	interface HotkeySettingsProps {
+     7		t: I18nContextType[0];
+     8		settings: Accessor<Settings>;
+     9		isRecordingHotkey: boolean;
+    10		pendingHotkey: string | null;
+    11		hotkeyError: string | null;
+    12		onToggleHotkeyRecording: () => void;
+    13		isRecordingHoldToSpeakHotkey: boolean;
+    14		pendingHoldToSpeakHotkey: string | null;
+    15		holdToSpeakHotkeyError: string | null;
+    16		onToggleHoldToSpeakHotkeyRecording: () => void;
+    17	}
+    18	
+    19	export default function HotkeySettings(props: HotkeySettingsProps) {
+    20		return (
+    21			<div class="space-y-6">
+    22				<div>
+    23					<div class="font-mono text-txt-muted text-xs uppercase tracking-wider block mb-3">
+    24						HANDS_FREE_TRIGGER
+    25					</div>
+    26					<div class="flex items-center gap-3">
+    27						<div
+    28							class={`flex-1 px-4 py-3 border font-mono text-center text-sm ${
+    29								props.isRecordingHotkey
+    30									? "border-ac bg-ac-bg text-ac"
+    31									: "border-border-strong bg-th-surface text-txt-primary"
+    32							}`}
+    33						>
+    34							{props.isRecordingHotkey
+    35								? props.pendingHotkey || "_ WAITING FOR INPUT _"
+    36								: hotkeyDisplayName(props.settings().hotkey)}
+    37						</div>
+    38						<button
+    39							type="button"
+    40							onClick={props.onToggleHotkeyRecording}
+    41							disabled={
+    42								props.holdToSpeakHotkeyError !== null ||
+    43								(props.isRecordingHoldToSpeakHotkey && !props.isRecordingHotkey)
+    44							}
+    45							class={`px-4 py-3 font-mono text-xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
+    46								props.isRecordingHotkey
+    47									? "bg-border text-txt-secondary hover:bg-border-strong"
+    48									: "bg-ac text-ac-on hover:bg-ac-hover"
+    49							}`}
+    50						>
+    51							{props.isRecordingHotkey ? "[CANCEL]" : "[CHANGE]"}
+    52						</button>
+    53					</div>
+    54					<Show when={props.hotkeyError}>
+    55						<div class="font-mono text-xs text-red-500">{props.hotkeyError}</div>
+    56					</Show>
+    57					<p class="mt-3 font-mono text-xs text-txt-faint">{props.t("settings.hotkeyDescription")}</p>
+    58				</div>
+    59				<div>
+    60					<div class="font-mono text-txt-muted text-xs uppercase tracking-wider block mb-3">
+    61						HOLD_TO_SPEAK_TRIGGER
+    62					</div>
+    63					<div class="flex items-center gap-3">
+    64						<div
+    65							class={`flex-1 px-4 py-3 border font-mono text-center text-sm ${
+    66								props.isRecordingHoldToSpeakHotkey
+    67									? "border-ac bg-ac-bg text-ac"
+    68									: "border-border-strong bg-th-surface text-txt-primary"
+    69							}`}
+    70						>
+    71							{props.isRecordingHoldToSpeakHotkey
+    72								? props.pendingHoldToSpeakHotkey || "_ WAITING FOR INPUT _"
+    73								: hotkeyDisplayName(props.settings().holdToSpeakHotkey)}
+    74						</div>
+    75						<button
+    76							type="button"
+    77							onClick={props.onToggleHoldToSpeakHotkeyRecording}
+    78							disabled={
+    79								props.hotkeyError !== null ||
+    80								(props.isRecordingHotkey && !props.isRecordingHoldToSpeakHotkey)
+    81							}
+    82							class={`px-4 py-3 font-mono text-xs uppercase tracking-wider transition-colors disabled:opacity-50 ${
+    83								props.isRecordingHoldToSpeakHotkey
+    84									? "bg-border text-txt-secondary hover:bg-border-strong"
+    85									: "bg-ac text-ac-on hover:bg-ac-hover"
+    86							}`}
+    87						>
+    88							{props.isRecordingHoldToSpeakHotkey ? "[CANCEL]" : "[CHANGE]"}
+    89						</button>
+    90					</div>
+    91					<Show when={props.holdToSpeakHotkeyError}>
+    92						<div class="font-mono text-xs text-red-500">{props.holdToSpeakHotkeyError}</div>
+    93					</Show>
+    94					<p class="mt-3 font-mono text-xs text-txt-faint">
+    95						{props.t("settings.holdToSpeakHotkeyDescription")}
+    96					</p>
+    97				</div>
+    98			</div>
+    99		);
+   100	}
+===== components/settings/LanguageSettings.tsx =====
+     1	import type { Locale } from "../../i18n";
+     2	import { capture } from "../../lib/posthog";
+     3	import { updateLanguage } from "../../lib/settingsStore";
+     4	import Select from "./Select";
+     5	import type { SelectOption } from "./types";
+     6	
+     7	interface LanguageSettingsProps {
+     8		locale: Locale;
+     9		setLocale: (locale: Locale) => void;
+    10	}
+    11	
+    12	const languageOptions: SelectOption[] = [
+    13		{ value: "en", label: "ENGLISH" },
+    14		{ value: "ru", label: "RUSSIAN" },
+    15		{ value: "es", label: "ESPAÑOL" },
+    16		{ value: "zh", label: "中文" },
+    17		{ value: "de", label: "DEUTSCH" },
+    18		{ value: "fr", label: "FRANÇAIS" },
+    19		{ value: "it", label: "ITALIANO" },
+    20	];
+    21	
+    22	export default function LanguageSettings(props: LanguageSettingsProps) {
+    23		return (
+    24			<div class="space-y-6">
+    25				<div>
+    26					<div class="font-mono text-txt-muted text-xs uppercase tracking-wider block mb-3">
+    27						INTERFACE_LANGUAGE
+    28					</div>
+    29					<Select
+    30						value={props.locale}
+    31						options={languageOptions}
+    32						onChange={(value) => {
+    33							capture("settings_language_changed", { language: value });
+    34							updateLanguage(value as Locale, props.setLocale);
+    35						}}
+    36					/>
+    37				</div>
+    38			</div>
+    39		);
+    40	}
+===== components/settings/ModelSettings.tsx =====
+     1	import { listen } from "@tauri-apps/api/event";
+     2	import { Result } from "better-result";
+     3	import { AlertCircle, Check, Download, Loader } from "lucide-solid";
+     4	import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+     5	import type { I18nContextType } from "../../i18n";
+     6	import {
+     7		type ModelDownloadProgress,
+     8		type ModelInfo,
+     9		downloadModel,
+    10		listModels,
+    11		setActiveModel,
+    12	} from "../../lib/commands/model";
+    13	import { capture } from "../../lib/posthog";
+    14	
+    15	interface ModelSettingsProps {
+    16		t: I18nContextType[0];
+    17	}
+    18	
+    19	export default function ModelSettings(props: ModelSettingsProps) {
+    20		const [models, setModels] = createSignal<ModelInfo[]>([]);
+    21		const [progress, setProgress] = createSignal<Record<string, number>>({});
+    22		const [downloadingId, setDownloadingId] = createSignal<string | null>(null);
+    23		const [busyId, setBusyId] = createSignal<string | null>(null);
+    24		const [error, setError] = createSignal<string | null>(null);
+    25	
+    26		const refresh = async () => {
+    27			const result = await listModels();
+    28			if (Result.isOk(result)) {
+    29				setModels(result.value);
+    30			} else {
+    31				setError(result.error.message);
+    32			}
+    33		};
+    34	
+    35		onMount(async () => {
+    36			await refresh();
+    37	
+    38			const unlisten = await listen<ModelDownloadProgress>("model-download-progress", (event) => {
+    39				setProgress((prev) => ({ ...prev, [event.payload.model_id]: event.payload.progress }));
+    40				if (event.payload.progress >= 100) {
+    41					setDownloadingId((current) => (current === event.payload.model_id ? null : current));
+    42					void refresh();
+    43				}
+    44			});
+    45			onCleanup(() => unlisten());
+    46		});
+    47	
+    48		const handleDownload = async (model: ModelInfo) => {
+    49			setError(null);
+    50			setDownloadingId(model.id);
+    51			setProgress((prev) => ({ ...prev, [model.id]: 0 }));
+    52			capture("settings_model_download_started", { model: model.id });
+    53	
+    54			const result = await downloadModel(model.id);
+    55			setDownloadingId(null);
+    56			if (Result.isError(result)) {
+    57				setError(result.error.message);
+    58			}
+    59			await refresh();
+    60		};
+    61	
+    62		const handleUse = async (model: ModelInfo) => {
+    63			setError(null);
+    64			setBusyId(model.id);
+    65			const result = await setActiveModel(model.id);
+    66			setBusyId(null);
+    67			if (Result.isError(result)) {
+    68				setError(result.error.message);
+    69				return;
+    70			}
+    71			capture("settings_model_changed", { model: model.id });
+    72			await refresh();
+    73		};
+    74	
+    75		return (
+    76			<div class="space-y-6">
+    77				<p class="font-mono text-xs text-txt-faint">{props.t("settings.modelsDescription")}</p>
+    78	
+    79				<div class="space-y-3">
+    80					<For each={models()}>
+    81						{(model) => (
+    82							<div
+    83								class={`border p-4 ${
+    84									model.active ? "border-ac bg-ac-bg" : "border-border-strong bg-th-surface"
+    85								}`}
+    86							>
+    87								<div class="flex items-start justify-between gap-3">
+    88									<div class="min-w-0">
+    89										<div class="flex items-center gap-2 flex-wrap">
+    90											<span class="font-mono text-sm text-txt-primary uppercase tracking-wider truncate">
+    91												{model.name}
+    92											</span>
+    93											<Show when={model.recommended}>
+    94												<span class="font-mono text-[10px] uppercase tracking-wider text-ac border border-ac px-1.5 py-0.5">
+    95													{props.t("settings.modelRecommended")}
+    96												</span>
+    97											</Show>
+    98											<Show when={model.experimental}>
+    99												<span class="font-mono text-[10px] uppercase tracking-wider text-txt-muted border border-border-strong px-1.5 py-0.5">
+   100													{props.t("settings.modelExperimental")}
+   101												</span>
+   102											</Show>
+   103										</div>
+   104										<div class="mt-1.5 font-mono text-xs text-txt-faint">
+   105											{model.size_label} · {model.languages}
+   106										</div>
+   107									</div>
+   108	
+   109									<div class="shrink-0">
+   110										<Show when={model.active}>
+   111											<div class="flex items-center gap-1.5 font-mono text-xs text-success uppercase tracking-wider">
+   112												<Check class="w-4 h-4" />
+   113												{props.t("settings.modelInUse")}
+   114											</div>
+   115										</Show>
+   116	
+   117										<Show when={!model.active && downloadingId() !== model.id}>
+   118											<Show
+   119												when={model.downloaded}
+   120												fallback={
+   121													<button
+   122														type="button"
+   123														onClick={() => handleDownload(model)}
+   124														class="flex items-center gap-1.5 px-3 py-1.5 bg-ac text-ac-on font-mono text-xs uppercase tracking-wider hover:bg-ac-hover transition-colors"
+   125													>
+   126														<Download class="w-3.5 h-3.5" />
+   127														{props.t("settings.modelDownload")}
+   128													</button>
+   129												}
+   130											>
+   131												<Show
+   132													when={!model.experimental}
+   133													fallback={
+   134														<div class="flex items-center gap-1.5 font-mono text-xs text-txt-muted uppercase tracking-wider">
+   135															<Check class="w-3.5 h-3.5 text-success" />
+   136															{props.t("settings.modelDownloaded")}
+   137														</div>
+   138													}
+   139												>
+   140													<button
+   141														type="button"
+   142														onClick={() => handleUse(model)}
+   143														disabled={busyId() === model.id}
+   144														class="px-3 py-1.5 border border-ac text-ac font-mono text-xs uppercase tracking-wider hover:bg-ac hover:text-ac-on transition-colors disabled:opacity-50"
+   145													>
+   146														{props.t("settings.modelUse")}
+   147													</button>
+   148												</Show>
+   149											</Show>
+   150										</Show>
+   151									</div>
+   152								</div>
+   153	
+   154								<Show when={downloadingId() === model.id}>
+   155									<div class="mt-3 space-y-2">
+   156										<div class="w-full h-2 bg-border overflow-hidden">
+   157											<div
+   158												class="h-full bg-ac transition-all duration-300"
+   159												style={{ width: `${progress()[model.id] ?? 0}%` }}
+   160											/>
+   161										</div>
+   162										<div class="flex items-center gap-2 font-mono text-xs text-txt-secondary">
+   163											<Loader class="w-3.5 h-3.5 animate-spin" />
+   164											<span>
+   165												{progress()[model.id] ?? 0}% — {props.t("settings.modelDownloading")}
+   166											</span>
+   167										</div>
+   168									</div>
+   169								</Show>
+   170	
+   171								<Show when={model.experimental}>
+   172									<p class="mt-3 font-mono text-[11px] text-txt-faint leading-relaxed">
+   173										{props.t("settings.modelExperimentalNote")}
+   174									</p>
+   175								</Show>
+   176							</div>
+   177						)}
+   178					</For>
+   179				</div>
+   180	
+   181				<Show when={error()}>
+   182					<div class="flex items-center gap-2 font-mono text-xs text-ac">
+   183						<AlertCircle class="w-4 h-4" />
+   184						<span>
+   185							{props.t("settings.modelDownloadFailed")}: {error()}
+   186						</span>
+   187					</div>
+   188				</Show>
+   189			</div>
+   190		);
+   191	}
+===== components/settings/Select.tsx =====
+     1	import { ChevronDown } from "lucide-solid";
+     2	import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
+     3	import type { SelectOption } from "./types";
+     4	
+     5	interface SelectProps {
+     6		value: string;
+     7		options: SelectOption[];
+     8		onChange: (value: string) => void;
+     9		placeholder?: string;
+    10	}
+    11	
+    12	export default function Select(props: SelectProps) {
+    13		const [isOpen, setIsOpen] = createSignal(false);
+    14		let containerRef: HTMLDivElement | undefined;
+    15	
+    16		const selectedLabel = () => {
+    17			const option = props.options.find((o) => o.value === props.value);
+    18			return option?.label ?? props.placeholder ?? "";
+    19		};
+    20	
+    21		const handleClickOutside = (e: MouseEvent) => {
+    22			if (containerRef && !containerRef.contains(e.target as Node)) {
+    23				setIsOpen(false);
+    24			}
+    25		};
+    26	
+    27		createEffect(() => {
+    28			if (isOpen()) {
+    29				document.addEventListener("click", handleClickOutside);
+    30			} else {
+    31				document.removeEventListener("click", handleClickOutside);
+    32			}
+    33		});
+    34	
+    35		onCleanup(() => {
+    36			document.removeEventListener("click", handleClickOutside);
+    37		});
+    38	
+    39		return (
+    40			<div ref={containerRef} class="relative">
+    41				<button
+    42					type="button"
+    43					onClick={() => setIsOpen(!isOpen())}
+    44					class="flex items-center justify-between w-full px-4 py-2.5 bg-th-surface border border-border-strong text-txt-primary hover:border-ac focus:outline-none focus:border-ac transition-colors font-mono text-sm"
+    45				>
+    46					<span class="truncate">{selectedLabel()}</span>
+    47					<ChevronDown
+    48						class={`w-4 h-4 ml-2 text-txt-muted transition-transform ${isOpen() ? "rotate-180" : ""}`}
+    49					/>
+    50				</button>
+    51	
+    52				<Show when={isOpen()}>
+    53					<div class="absolute z-50 w-full mt-1 bg-th-surface border border-border-strong max-h-60 overflow-auto">
+    54						<For each={props.options}>
+    55							{(option) => (
+    56								<button
+    57									type="button"
+    58									onClick={() => {
+    59										props.onChange(option.value);
+    60										setIsOpen(false);
+    61									}}
+    62									class={`flex items-center justify-between w-full px-4 py-2.5 text-left hover:bg-th-hover transition-colors font-mono text-sm ${
+    63										option.value === props.value ? "text-ac bg-th-hover" : "text-txt-primary"
+    64									}`}
+    65								>
+    66									<span class="truncate">{option.label}</span>
+    67									<Show when={option.value === props.value}>
+    68										<span class="text-ac">[*]</span>
+    69									</Show>
+    70								</button>
+    71							)}
+    72						</For>
+    73					</div>
+    74				</Show>
+    75			</div>
+    76		);
+    77	}
+===== components/settings/SettingsSidebar.tsx =====
+     1	import { Check, Copy } from "lucide-solid";
+     2	import { For, Show } from "solid-js";
+     3	import { useI18n } from "../../i18n";
+     4	import type { SettingsSection } from "./types";
+     5	
+     6	type SidebarLabelKey =
+     7		| "settings.audio"
+     8		| "settings.models"
+     9		| "settings.hotkeys"
+    10		| "settings.appearance"
+    11		| "settings.language";
+    12	
+    13	interface SidebarItem {
+    14		id: SettingsSection;
+    15		num: string;
+    16		labelKey: SidebarLabelKey;
+    17	}
+    18	
+    19	interface SettingsSidebarProps {
+    20		activeSection: SettingsSection;
+    21		appVersion: string;
+    22		versionCopied: boolean;
+    23		onSectionChange: (section: SettingsSection) => void;
+    24		onCopyVersion: () => void;
+    25	}
+    26	
+    27	const sidebarItems: SidebarItem[] = [
+    28		{ id: "audio", num: "01", labelKey: "settings.audio" },
+    29		{ id: "model", num: "02", labelKey: "settings.models" },
+    30		{ id: "hotkey", num: "03", labelKey: "settings.hotkeys" },
+    31		{ id: "appearance", num: "04", labelKey: "settings.appearance" },
+    32		{ id: "language", num: "05", labelKey: "settings.language" },
+    33	];
+    34	
+    35	export default function SettingsSidebar(props: SettingsSidebarProps) {
+    36		const [t] = useI18n();
+    37	
+    38		return (
+    39			<div class="w-56 bg-th-base border-r border-border flex flex-col">
+    40				<div class="px-4 py-4 border-b border-border">
+    41					<h2 class="font-mono text-ac text-sm tracking-wider uppercase">
+    42						[VOXFUSION] &gt; {t("settings.title")}
+    43					</h2>
+    44				</div>
+    45				<nav class="flex-1 py-2">
+    46					<For each={sidebarItems}>
+    47						{(item) => (
+    48							<button
+    49								type="button"
+    50								onClick={() => props.onSectionChange(item.id)}
+    51								class={`flex items-center gap-3 w-full px-4 py-3 font-mono text-xs tracking-wider transition-colors ${
+    52									props.activeSection === item.id
+    53										? "text-ac border-l-2 border-ac bg-th-surface"
+    54										: "text-txt-muted hover:text-txt-secondary hover:bg-th-surface border-l-2 border-transparent"
+    55								}`}
+    56							>
+    57								<span class={props.activeSection === item.id ? "text-ac" : "text-txt-faint"}>
+    58									{item.num}
+    59								</span>
+    60								<span class="uppercase">{t(item.labelKey)}</span>
+    61							</button>
+    62						)}
+    63					</For>
+    64				</nav>
+    65				<Show when={props.appVersion}>
+    66					<div class="px-4 py-3 border-t border-border">
+    67						<button
+    68							type="button"
+    69							onClick={props.onCopyVersion}
+    70							class="group flex items-center gap-1.5 font-mono text-[10px] text-txt-faint hover:text-txt-muted transition-all active:scale-95"
+    71						>
+    72							<span>v{props.appVersion}</span>
+    73							<Show
+    74								when={props.versionCopied}
+    75								fallback={
+    76									<Copy class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+    77								}
+    78							>
+    79								<Check class="w-3 h-3 text-ac" />
+    80							</Show>
+    81						</button>
+    82					</div>
+    83				</Show>
+    84			</div>
+    85		);
+    86	}
+===== components/settings/ThemeOption.tsx =====
+     1	import { Show } from "solid-js";
+     2	import type { Theme } from "../../lib/settingsStore";
+     3	
+     4	interface ThemeOptionProps {
+     5		value: Theme;
+     6		label: string;
+     7		isSelected: boolean;
+     8		onClick: () => void;
+     9	}
+    10	
+    11	export default function ThemeOption(props: ThemeOptionProps) {
+    12		return (
+    13			<button
+    14				type="button"
+    15				onClick={props.onClick}
+    16				class={`relative p-4 border transition-all ${
+    17					props.isSelected
+    18						? "border-ac bg-ac-bg"
+    19						: "border-border-strong bg-th-surface hover:border-txt-faint"
+    20				}`}
+    21			>
+    22				<div class="mb-3">
+    23					<Show when={props.value === "light"}>
+    24						<div class="w-full h-12 bg-[#e0e0e0] border border-[#ccc] flex items-center justify-center">
+    25							<div class="w-8 h-1.5 bg-[#999]" />
+    26						</div>
+    27					</Show>
+    28					<Show when={props.value === "dark"}>
+    29						<div class="w-full h-12 bg-[#1a1a1a] border border-[#333] flex items-center justify-center">
+    30							<div class="w-8 h-1.5 bg-[#444]" />
+    31						</div>
+    32					</Show>
+    33					<Show when={props.value === "system"}>
+    34						<div class="w-full h-12 overflow-hidden flex">
+    35							<div class="w-1/2 bg-[#e0e0e0] border-l border-t border-b border-[#ccc] flex items-center justify-center">
+    36								<div class="w-4 h-1.5 bg-[#999]" />
+    37							</div>
+    38							<div class="w-1/2 bg-[#1a1a1a] border-r border-t border-b border-[#333] flex items-center justify-center">
+    39								<div class="w-4 h-1.5 bg-[#444]" />
+    40							</div>
+    41						</div>
+    42					</Show>
+    43				</div>
+    44				<span
+    45					class={`font-mono text-xs uppercase tracking-wider ${props.isSelected ? "text-ac" : "text-txt-secondary"}`}
+    46				>
+    47					{props.label}
+    48				</span>
+    49				<Show when={props.isSelected}>
+    50					<div class="absolute top-2 right-2 font-mono text-ac text-xs">[*]</div>
+    51				</Show>
+    52			</button>
+    53		);
+    54	}
+===== components/settings/types.ts =====
+     1	export type SettingsSection = "audio" | "model" | "hotkey" | "appearance" | "language";
+     2	
+     3	export interface SelectOption {
+     4		value: string;
+     5		label: string;
+     6	}
+===== components/onboarding/OnboardingWizard.tsx =====
+     1	import { Show, createSignal } from "solid-js";
+     2	import { useI18n } from "../../i18n";
+     3	import { ONBOARDING_STEP_COUNT } from "../../lib/onboarding";
+     4	import { capture } from "../../lib/posthog";
+     5	import { updateOnboardingStep } from "../../lib/settingsStore";
+     6	import StepIndicator from "./StepIndicator";
+     7	import AccessibilityPermissionStep from "./steps/AccessibilityPermissionStep";
+     8	import CompletionStep from "./steps/CompletionStep";
+     9	import HotkeyStep from "./steps/HotkeyStep";
+    10	import LearningStep from "./steps/LearningStep";
+    11	import MicrophonePermissionStep from "./steps/MicrophonePermissionStep";
+    12	import MicrophoneStep from "./steps/MicrophoneStep";
+    13	import ModelDownloadStep from "./steps/ModelDownloadStep";
+    14	
+    15	interface OnboardingWizardProps {
+    16		initialStep: number;
+    17		onComplete: () => void;
+    18	}
+    19	
+    20	export default function OnboardingWizard(props: OnboardingWizardProps) {
+    21		const [t] = useI18n();
+    22		const [currentStep, setCurrentStep] = createSignal(props.initialStep);
+    23		const [isAnimating, setIsAnimating] = createSignal(false);
+    24		const [animationDirection, setAnimationDirection] = createSignal<"forward" | "backward">(
+    25			"forward"
+    26		);
+    27		const [micPermissionGranted, setMicPermissionGranted] = createSignal(false);
+    28		const [accessibilityPermissionGranted, setAccessibilityPermissionGranted] = createSignal(false);
+    29		const [modelDownloaded, setModelDownloaded] = createSignal(false);
+    30		const [learningCompleted, setLearningCompleted] = createSignal(false);
+    31	
+    32		const goToNext = () => {
+    33			if (currentStep() < ONBOARDING_STEP_COUNT) {
+    34				capture("onboarding_step_completed", { step: currentStep() });
+    35				setAnimationDirection("forward");
+    36				setIsAnimating(true);
+    37				setTimeout(() => {
+    38					const nextStep = currentStep() + 1;
+    39					setCurrentStep(nextStep);
+    40					setIsAnimating(false);
+    41					updateOnboardingStep(nextStep);
+    42				}, 200);
+    43			}
+    44		};
+    45	
+    46		const goToPrevious = () => {
+    47			if (currentStep() > 1) {
+    48				setAnimationDirection("backward");
+    49				setIsAnimating(true);
+    50				setTimeout(() => {
+    51					const prevStep = currentStep() - 1;
+    52					setCurrentStep(prevStep);
+    53					setIsAnimating(false);
+    54					updateOnboardingStep(prevStep);
+    55				}, 200);
+    56			}
+    57		};
+    58	
+    59		const handleComplete = () => {
+    60			props.onComplete();
+    61		};
+    62	
+    63		const canProceed = () => {
+    64			const step = currentStep();
+    65			if (step === 1) return micPermissionGranted();
+    66			if (step === 2) return accessibilityPermissionGranted();
+    67			if (step === 5) return modelDownloaded();
+    68			if (step === 6) return learningCompleted();
+    69			return true;
+    70		};
+    71	
+    72		const formatStep = (step: number) => step.toString().padStart(2, "0");
+    73	
+    74		return (
+    75			<div class="fixed inset-0 bg-th-base flex flex-col items-center justify-center p-8">
+    76				<div
+    77					class="absolute inset-0 pointer-events-none"
+    78					style={{
+    79						"background-image":
+    80							"linear-gradient(var(--color-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px)",
+    81						"background-size": "40px 40px",
+    82					}}
+    83				/>
+    84	
+    85				<div class="absolute top-0 left-0 right-0 h-6 z-50" data-tauri-drag-region />
+    86	
+    87				<div class="absolute top-8 right-8 font-mono text-txt-muted text-sm tracking-wider">
+    88					{formatStep(currentStep())}/{formatStep(ONBOARDING_STEP_COUNT)}
+    89				</div>
+    90	
+    91				<div class="mb-12">
+    92					<StepIndicator currentStep={currentStep()} totalSteps={ONBOARDING_STEP_COUNT} />
+    93				</div>
+    94	
+    95				<div
+    96					class={`flex-1 flex items-center justify-center w-full transition-all duration-300 ${currentStep() === 6 ? "max-w-4xl" : "max-w-2xl"}`}
+    97				>
+    98					<div
+    99						class={`w-full transition-all duration-200 ${
+   100							isAnimating()
+   101								? animationDirection() === "forward"
+   102									? "opacity-0 translate-x-8"
+   103									: "opacity-0 -translate-x-8"
+   104								: "opacity-100 translate-x-0"
+   105						}`}
+   106					>
+   107						<Show when={currentStep() === 1}>
+   108							<MicrophonePermissionStep onPermissionChange={setMicPermissionGranted} />
+   109						</Show>
+   110						<Show when={currentStep() === 2}>
+   111							<AccessibilityPermissionStep onPermissionChange={setAccessibilityPermissionGranted} />
+   112						</Show>
+   113						<Show when={currentStep() === 3}>
+   114							<MicrophoneStep />
+   115						</Show>
+   116						<Show when={currentStep() === 4}>
+   117							<HotkeyStep />
+   118						</Show>
+   119						<Show when={currentStep() === 5}>
+   120							<ModelDownloadStep onDownloadComplete={() => setModelDownloaded(true)} />
+   121						</Show>
+   122						<Show when={currentStep() === 6}>
+   123							<LearningStep onTranscriptionComplete={() => setLearningCompleted(true)} />
+   124						</Show>
+   125						<Show when={currentStep() === 7}>
+   126							<CompletionStep />
+   127						</Show>
+   128					</div>
+   129				</div>
+   130	
+   131				<div
+   132					class={`flex items-center justify-between w-full mt-8 transition-all duration-300 ${currentStep() === 6 ? "max-w-4xl" : "max-w-2xl"}`}
+   133				>
+   134					<Show when={currentStep() > 1} fallback={<div />}>
+   135						<button
+   136							type="button"
+   137							onClick={goToPrevious}
+   138							class="px-6 py-3 font-mono text-txt-secondary hover:text-txt-primary transition-colors uppercase tracking-wider text-sm border border-border-strong hover:border-ac"
+   139						>
+   140							{t("onboarding.back")}
+   141						</button>
+   142					</Show>
+   143	
+   144					<Show
+   145						when={currentStep() < ONBOARDING_STEP_COUNT}
+   146						fallback={
+   147							<button
+   148								type="button"
+   149								onClick={handleComplete}
+   150								class="px-8 py-3 bg-ac text-ac-on font-mono font-bold uppercase tracking-wider text-sm hover:bg-ac-hover transition-colors"
+   151							>
+   152								{t("onboarding.getStarted")}
+   153							</button>
+   154						}
+   155					>
+   156						<button
+   157							type="button"
+   158							onClick={goToNext}
+   159							disabled={!canProceed()}
+   160							class="px-8 py-3 bg-ac text-ac-on font-mono font-bold uppercase tracking-wider text-sm hover:bg-ac-hover transition-colors disabled:opacity-30"
+   161						>
+   162							{t("onboarding.next")}
+   163						</button>
+   164					</Show>
+   165				</div>
+   166			</div>
+   167		);
+   168	}
+===== components/onboarding/StepIndicator.tsx =====
+     1	import { For } from "solid-js";
+     2	
+     3	interface StepIndicatorProps {
+     4		currentStep: number;
+     5		totalSteps: number;
+     6	}
+     7	
+     8	export default function StepIndicator(props: StepIndicatorProps) {
+     9		const formatStep = (step: number) => step.toString().padStart(2, "0");
+    10	
+    11		return (
+    12			<div class="flex items-center gap-4 font-mono">
+    13				<For each={Array.from({ length: props.totalSteps }, (_, i) => i + 1)}>
+    14					{(step) => (
+    15						<div class="flex items-center">
+    16							<div
+    17								class={`text-sm tracking-wider transition-all ${
+    18									step < props.currentStep
+    19										? "text-ac"
+    20										: step === props.currentStep
+    21											? "text-ac font-bold"
+    22											: "text-txt-muted"
+    23								}`}
+    24							>
+    25								{formatStep(step)}
+    26							</div>
+    27							{step < props.totalSteps && (
+    28								<div
+    29									class={`w-8 h-px mx-3 transition-colors ${
+    30										step < props.currentStep ? "bg-ac" : "bg-border-strong"
+    31									}`}
+    32								/>
+    33							)}
+    34						</div>
+    35					)}
+    36				</For>
+    37			</div>
+    38		);
+    39	}

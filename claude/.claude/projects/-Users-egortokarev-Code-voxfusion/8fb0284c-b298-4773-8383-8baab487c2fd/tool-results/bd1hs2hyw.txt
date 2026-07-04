@@ -1,0 +1,993 @@
+===== components/onboarding/steps/AccessibilityPermissionStep.tsx =====
+     1	import { type UnlistenFn, listen } from "@tauri-apps/api/event";
+     2	import { Result } from "better-result";
+     3	import { AlertCircle, Check, ExternalLink, Shield } from "lucide-solid";
+     4	import { Show, createSignal, onCleanup, onMount } from "solid-js";
+     5	import { requestAccessibilityPermission } from "tauri-plugin-macos-permissions-api";
+     6	import { useI18n } from "../../../i18n";
+     7	import { checkAccessibilityProbe } from "../../../lib/commands/permissions";
+     8	
+     9	interface AccessibilityPermissionStepProps {
+    10		onPermissionChange: (granted: boolean) => void;
+    11	}
+    12	
+    13	export default function AccessibilityPermissionStep(props: AccessibilityPermissionStepProps) {
+    14		const [t] = useI18n();
+    15		const [isGranted, setIsGranted] = createSignal<boolean | null>(null);
+    16		const [isRequesting, setIsRequesting] = createSignal(false);
+    17		let pollInterval: ReturnType<typeof setInterval> | undefined;
+    18		let unlistenFn: UnlistenFn | undefined;
+    19	
+    20		const markGranted = () => {
+    21			setIsGranted(true);
+    22			props.onPermissionChange(true);
+    23			if (pollInterval) {
+    24				clearInterval(pollInterval);
+    25				pollInterval = undefined;
+    26			}
+    27		};
+    28	
+    29		const checkPermission = async () => {
+    30			const granted = await checkAccessibilityProbe();
+    31			if (Result.isError(granted)) {
+    32				setIsGranted(false);
+    33				props.onPermissionChange(false);
+    34				return;
+    35			}
+    36			setIsGranted(granted.value);
+    37			props.onPermissionChange(granted.value);
+    38			if (granted.value && pollInterval) {
+    39				clearInterval(pollInterval);
+    40				pollInterval = undefined;
+    41			}
+    42		};
+    43	
+    44		const checkWithRetries = async () => {
+    45			// Try immediately
+    46			await checkPermission();
+    47			if (isGranted()) return;
+    48	
+    49			// Retry after 200ms (let TCC settle)
+    50			await new Promise((r) => setTimeout(r, 200));
+    51			await checkPermission();
+    52			if (isGranted()) return;
+    53	
+    54			// Retry after 500ms more
+    55			await new Promise((r) => setTimeout(r, 500));
+    56			await checkPermission();
+    57			if (isGranted()) return;
+    58	
+    59			// Final retry after 1s more — if probes are fully cached,
+    60			// trust the notification since it only fires on an actual toggle
+    61			await new Promise((r) => setTimeout(r, 1000));
+    62			await checkPermission();
+    63			if (!isGranted()) {
+    64				// AXIsProcessTrusted can lag behind the Settings notification.
+    65				// The notification itself is reliable — it fires when the user
+    66				// toggles the switch. Trust it.
+    67				markGranted();
+    68			}
+    69		};
+    70	
+    71		onMount(async () => {
+    72			await checkPermission();
+    73	
+    74			if (!isGranted()) {
+    75				// Poll as fallback
+    76				pollInterval = setInterval(checkPermission, 1000);
+    77	
+    78				// Listen for macOS distributed notification when the user
+    79				// toggles accessibility in System Settings
+    80				unlistenFn = await listen("accessibility-changed", () => {
+    81					checkWithRetries();
+    82				});
+    83			}
+    84		});
+    85	
+    86		onCleanup(() => {
+    87			if (pollInterval) {
+    88				clearInterval(pollInterval);
+    89			}
+    90			if (unlistenFn) {
+    91				unlistenFn();
+    92			}
+    93		});
+    94	
+    95		const handleOpenSettings = async () => {
+    96			setIsRequesting(true);
+    97			await Result.tryPromise(() => requestAccessibilityPermission());
+    98			if (!pollInterval) {
+    99				pollInterval = setInterval(checkPermission, 1000);
+   100			}
+   101			setIsRequesting(false);
+   102		};
+   103	
+   104		return (
+   105			<div class="text-center max-w-md mx-auto">
+   106				{/* Terminal-style header */}
+   107				<div class="font-mono text-ac text-sm mb-8 tracking-wider">
+   108					[STEP_02] &gt; ACCESSIBILITY_PERMISSION
+   109				</div>
+   110	
+   111				{/* Card container */}
+   112				<div class="border border-border bg-th-surface p-8">
+   113					<div class="w-16 h-16 border border-border-strong flex items-center justify-center mx-auto mb-6">
+   114						<Shield class="w-8 h-8 text-ac" />
+   115					</div>
+   116	
+   117					<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-3">
+   118						{t("onboarding.accessibilityTitle")}
+   119					</h2>
+   120	
+   121					<p class="font-mono text-sm text-txt-secondary mb-4">
+   122						{t("onboarding.accessibilityDescription")}
+   123					</p>
+   124	
+   125					<Show when={isGranted() === false}>
+   126						<p class="font-mono text-xs text-txt-muted mb-6 border-l-2 border-border-strong pl-3 text-left">
+   127							{t("onboarding.accessibilityInstructions")}
+   128						</p>
+   129					</Show>
+   130	
+   131					<div class="mb-6">
+   132						<Show when={isGranted() === null}>
+   133							<div class="flex items-center justify-center gap-2 font-mono text-sm text-txt-muted">
+   134								<div class="w-4 h-4 border-2 border-txt-muted border-t-transparent rounded-full animate-spin" />
+   135								<span>{t("onboarding.checkingPermission")}</span>
+   136							</div>
+   137						</Show>
+   138						<Show when={isGranted() === true}>
+   139							<div class="flex items-center justify-center gap-2 font-mono text-sm text-success">
+   140								<Check class="w-5 h-5" />
+   141								<span>{t("onboarding.accessibilityGranted")}</span>
+   142							</div>
+   143						</Show>
+   144						<Show when={isGranted() === false}>
+   145							<div class="flex items-center justify-center gap-2 font-mono text-sm text-ac">
+   146								<AlertCircle class="w-5 h-5" />
+   147								<span>{t("onboarding.accessibilityNotGranted")}</span>
+   148							</div>
+   149						</Show>
+   150					</div>
+   151	
+   152					<Show when={isGranted() !== true}>
+   153						<button
+   154							type="button"
+   155							onClick={handleOpenSettings}
+   156							disabled={isRequesting() || isGranted() === null}
+   157							class="inline-flex items-center gap-2 px-6 py-3 bg-ac text-ac-on font-mono font-bold uppercase tracking-wider text-sm hover:bg-ac-hover transition-colors disabled:opacity-30"
+   158						>
+   159							<span>{t("onboarding.openSystemPreferences")}</span>
+   160							<ExternalLink class="w-4 h-4" />
+   161						</button>
+   162					</Show>
+   163				</div>
+   164			</div>
+   165		);
+   166	}
+===== components/onboarding/steps/CompletionStep.tsx =====
+     1	import { CheckCircle } from "lucide-solid";
+     2	import { useI18n } from "../../../i18n";
+     3	
+     4	export default function CompletionStep() {
+     5		const [t] = useI18n();
+     6	
+     7		return (
+     8			<div class="text-center max-w-md mx-auto">
+     9				{/* Terminal-style header */}
+    10				<div class="font-mono text-success text-sm mb-8 tracking-wider">
+    11					[STEP_07] &gt; SETUP_COMPLETE
+    12				</div>
+    13	
+    14				{/* Card container */}
+    15				<div class="border border-border bg-th-surface p-8">
+    16					<div class="w-20 h-20 border border-success flex items-center justify-center mx-auto mb-6">
+    17						<CheckCircle class="w-12 h-12 text-success" />
+    18					</div>
+    19	
+    20					<h2 class="font-mono text-2xl uppercase tracking-wider text-txt-primary mb-3">
+    21						{t("onboarding.completionTitle")}
+    22					</h2>
+    23	
+    24					<p class="font-mono text-sm text-txt-secondary">{t("onboarding.completionDescription")}</p>
+    25	
+    26					{/* Decorative element */}
+    27					<div class="mt-8 pt-6 border-t border-border">
+    28						<div class="font-mono text-xs text-txt-muted tracking-wider">
+    29							&gt; READY_TO_TRANSCRIBE
+    30						</div>
+    31					</div>
+    32				</div>
+    33			</div>
+    34		);
+    35	}
+===== components/onboarding/steps/HotkeyStep.tsx =====
+     1	import { Keyboard } from "lucide-solid";
+     2	import { useHotkeyRecorder } from "../../../hooks/useHotkeyRecorder";
+     3	import { useI18n } from "../../../i18n";
+     4	import {
+     5		hotkeyDisplayName,
+     6		validateHandsFreeHotkey,
+     7		validateHoldToSpeakHotkey,
+     8	} from "../../../lib/hotkeyUtils";
+     9	import { updateHoldToSpeakHotkey, useSettings } from "../../../lib/settingsStore";
+    10	
+    11	export default function HotkeyStep() {
+    12		const [t] = useI18n();
+    13		const settings = useSettings();
+    14		const { isRecording, pendingHotkey, error, toggleRecording } = useHotkeyRecorder({
+    15			validator: validateHandsFreeHotkey,
+    16			recorderId: "handsfree",
+    17		});
+    18		const {
+    19			isRecording: isRecordingHoldToSpeak,
+    20			pendingHotkey: pendingHoldToSpeakHotkey,
+    21			error: holdToSpeakError,
+    22			toggleRecording: toggleHoldToSpeakRecording,
+    23		} = useHotkeyRecorder({
+    24			onHotkeyRecorded: updateHoldToSpeakHotkey,
+    25			validator: validateHoldToSpeakHotkey,
+    26			recorderId: "holdtospeak",
+    27		});
+    28	
+    29		return (
+    30			<div class="text-center max-w-md mx-auto">
+    31				{/* Terminal-style header */}
+    32				<div class="font-mono text-ac text-sm mb-8 tracking-wider">[STEP_04] &gt; HOTKEY_CONFIG</div>
+    33	
+    34				{/* Card container */}
+    35				<div class="border border-border bg-th-surface p-8">
+    36					<div class="w-16 h-16 border border-border-strong flex items-center justify-center mx-auto mb-6">
+    37						<Keyboard class="w-8 h-8 text-ac" />
+    38					</div>
+    39	
+    40					<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-3">
+    41						{t("onboarding.hotkeyTitle")}
+    42					</h2>
+    43	
+    44					<p class="font-mono text-sm text-txt-secondary mb-8">{t("onboarding.hotkeyDescription")}</p>
+    45	
+    46					<div class="space-y-4">
+    47						<div class="font-mono text-xs text-txt-muted uppercase tracking-wider text-left">
+    48							{t("onboarding.handsFreeHotkey")}
+    49						</div>
+    50						<div
+    51							class={`px-6 py-4 border font-mono text-lg ${
+    52								isRecording()
+    53									? "border-ac bg-ac-bg text-ac"
+    54									: "border-border-strong bg-th-base text-txt-primary"
+    55							}`}
+    56						>
+    57							{isRecording()
+    58								? pendingHotkey() || t("onboarding.pressKeys")
+    59								: hotkeyDisplayName(settings().hotkey)}
+    60						</div>
+    61	
+    62						<button
+    63							type="button"
+    64							onClick={toggleRecording}
+    65							disabled={holdToSpeakError() !== null || (isRecordingHoldToSpeak() && !isRecording())}
+    66							class={`px-6 py-3 font-mono font-bold uppercase tracking-wider text-sm transition-colors disabled:opacity-50 ${
+    67								isRecording()
+    68									? "border border-border-strong text-txt-secondary hover:border-ac hover:text-txt-primary bg-transparent"
+    69									: "bg-ac text-ac-on hover:bg-ac-hover"
+    70							}`}
+    71						>
+    72							{isRecording() ? t("settings.cancel") : t("onboarding.recordHotkey")}
+    73						</button>
+    74						{error() && <div class="font-mono text-xs text-red-500">{error()}</div>}
+    75	
+    76						<div class="font-mono text-xs text-txt-muted uppercase tracking-wider text-left pt-4">
+    77							{t("onboarding.holdToSpeakHotkey")}
+    78						</div>
+    79						<div
+    80							class={`px-6 py-4 border font-mono text-lg ${
+    81								isRecordingHoldToSpeak()
+    82									? "border-ac bg-ac-bg text-ac"
+    83									: "border-border-strong bg-th-base text-txt-primary"
+    84							}`}
+    85						>
+    86							{isRecordingHoldToSpeak()
+    87								? pendingHoldToSpeakHotkey() || t("onboarding.pressKeys")
+    88								: hotkeyDisplayName(settings().holdToSpeakHotkey)}
+    89						</div>
+    90	
+    91						<button
+    92							type="button"
+    93							onClick={toggleHoldToSpeakRecording}
+    94							disabled={error() !== null || (isRecording() && !isRecordingHoldToSpeak())}
+    95							class={`px-6 py-3 font-mono font-bold uppercase tracking-wider text-sm transition-colors disabled:opacity-50 ${
+    96								isRecordingHoldToSpeak()
+    97									? "border border-border-strong text-txt-secondary hover:border-ac hover:text-txt-primary bg-transparent"
+    98									: "bg-ac text-ac-on hover:bg-ac-hover"
+    99							}`}
+   100						>
+   101							{isRecordingHoldToSpeak()
+   102								? t("settings.cancel")
+   103								: t("onboarding.recordHoldToSpeakHotkey")}
+   104						</button>
+   105						{holdToSpeakError() && (
+   106							<div class="font-mono text-xs text-red-500">{holdToSpeakError()}</div>
+   107						)}
+   108					</div>
+   109				</div>
+   110			</div>
+   111		);
+   112	}
+===== components/onboarding/steps/LearningStep.tsx =====
+     1	import { emit, listen } from "@tauri-apps/api/event";
+     2	import { Send } from "lucide-solid";
+     3	import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+     4	import { useI18n } from "../../../i18n";
+     5	import { useSettings } from "../../../lib/settingsStore";
+     6	
+     7	interface LearningStepProps {
+     8		onTranscriptionComplete: () => void;
+     9	}
+    10	
+    11	function parseHotkeyParts(hotkey: string): string[] {
+    12		const DISPLAY_MAP: Record<string, string> = {
+    13			Command: "\u2318",
+    14			Control: "\u2303",
+    15			Alt: "\u2325",
+    16			Shift: "\u21E7",
+    17			LeftControl: "Left \u2303",
+    18			RightControl: "Right \u2303",
+    19			LeftOption: "Left \u2325",
+    20			RightOption: "Right \u2325",
+    21			LeftCommand: "Left \u2318",
+    22			RightCommand: "Right \u2318",
+    23			Space: "Space",
+    24		};
+    25		return hotkey.split("+").map((part) => DISPLAY_MAP[part] ?? part);
+    26	}
+    27	
+    28	export default function LearningStep(props: LearningStepProps) {
+    29		const [t] = useI18n();
+    30		const settings = useSettings();
+    31		const [messages, setMessages] = createSignal<string[]>([]);
+    32		const [inputText, setInputText] = createSignal("");
+    33	
+    34		let inputRef: HTMLInputElement | undefined;
+    35	
+    36		const hotkeyParts = () => parseHotkeyParts(settings().hotkey);
+    37		const holdToSpeakHotkeyParts = () => parseHotkeyParts(settings().holdToSpeakHotkey);
+    38	
+    39		const addMessage = () => {
+    40			const text = inputText().trim();
+    41			if (!text) return;
+    42			setMessages((prev) => [...prev, text]);
+    43			setInputText("");
+    44			props.onTranscriptionComplete();
+    45		};
+    46	
+    47		onMount(async () => {
+    48			// biome-ignore lint/style/useConst: cleanup needs the listener reference before async setup finishes.
+    49			let unlisten: (() => void) | undefined;
+    50	
+    51			onCleanup(() => {
+    52				unlisten?.();
+    53				emit("learning-step-active", false);
+    54			});
+    55	
+    56			await emit("learning-step-active", true);
+    57	
+    58			unlisten = await listen("transcription-created", () => {
+    59				// Small delay to ensure type_text has fully populated the input
+    60				setTimeout(() => {
+    61					addMessage();
+    62					inputRef?.focus();
+    63				}, 100);
+    64			});
+    65	
+    66			inputRef?.focus();
+    67		});
+    68	
+    69		return (
+    70			<div class="w-full max-w-4xl mx-auto">
+    71				{/* Terminal-style header */}
+    72				<div class="font-mono text-ac text-sm mb-8 tracking-wider text-center">
+    73					[STEP_06] &gt; TRY_IT_OUT
+    74				</div>
+    75	
+    76				<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-2 text-center">
+    77					{t("onboarding.learningTitle")}
+    78				</h2>
+    79				<p class="font-mono text-sm text-txt-secondary mb-8 text-center">
+    80					{t("onboarding.learningDescription")}
+    81				</p>
+    82	
+    83				{/* Split view */}
+    84				<div class="flex gap-6">
+    85					{/* Left: Manual */}
+    86					<div class="flex-1 border border-border bg-th-surface p-6">
+    87						<div class="space-y-6">
+    88							{/* Step 1 */}
+    89							<div class="flex items-start gap-3">
+    90								<span class="font-mono text-ac text-sm font-bold mt-0.5">1.</span>
+    91								<div class="flex items-center gap-2 flex-wrap">
+    92									<span class="font-mono text-sm text-txt-secondary">
+    93										{t("onboarding.learningStep1Prefix")}
+    94									</span>
+    95									<For each={hotkeyParts()}>
+    96										{(part) => (
+    97											<kbd class="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 font-mono text-sm border border-border-strong bg-th-base text-txt-primary rounded">
+    98												{part}
+    99											</kbd>
+   100										)}
+   101									</For>
+   102									<span class="font-mono text-sm text-txt-secondary">
+   103										{t("onboarding.learningStep1Suffix")}
+   104									</span>
+   105								</div>
+   106							</div>
+   107	
+   108							{/* Step 2 */}
+   109							<div class="flex items-start gap-3">
+   110								<span class="font-mono text-ac text-sm font-bold mt-0.5">2.</span>
+   111								<span class="font-mono text-sm text-txt-secondary">
+   112									{t("onboarding.learningStep2")}
+   113								</span>
+   114							</div>
+   115	
+   116							{/* Step 3 */}
+   117							<div class="flex items-start gap-3">
+   118								<span class="font-mono text-ac text-sm font-bold mt-0.5">3.</span>
+   119								<div class="flex items-center gap-2 flex-wrap">
+   120									<span class="font-mono text-sm text-txt-secondary">
+   121										{t("onboarding.learningStep3Prefix")}
+   122									</span>
+   123									<For each={hotkeyParts()}>
+   124										{(part) => (
+   125											<kbd class="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 font-mono text-sm border border-border-strong bg-th-base text-txt-primary rounded">
+   126												{part}
+   127											</kbd>
+   128										)}
+   129									</For>
+   130									<span class="font-mono text-sm text-txt-secondary">
+   131										{t("onboarding.learningStep3Suffix")}
+   132									</span>
+   133								</div>
+   134							</div>
+   135	
+   136							{/* Step 4 */}
+   137							<div class="flex items-start gap-3">
+   138								<span class="font-mono text-ac text-sm font-bold mt-0.5">4.</span>
+   139								<span class="font-mono text-sm text-txt-secondary">
+   140									{t("onboarding.learningStep4")}
+   141								</span>
+   142							</div>
+   143	
+   144							<div class="flex items-start gap-3">
+   145								<span class="font-mono text-ac text-sm font-bold mt-0.5">5.</span>
+   146								<div class="flex items-center gap-2 flex-wrap">
+   147									<span class="font-mono text-sm text-txt-secondary">
+   148										{t("onboarding.learningHoldToSpeakPrefix")}
+   149									</span>
+   150									<For each={holdToSpeakHotkeyParts()}>
+   151										{(part) => (
+   152											<kbd class="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 font-mono text-sm border border-border-strong bg-th-base text-txt-primary rounded">
+   153												{part}
+   154											</kbd>
+   155										)}
+   156									</For>
+   157									<span class="font-mono text-sm text-txt-secondary">
+   158										{t("onboarding.learningHoldToSpeakSuffix")}
+   159									</span>
+   160								</div>
+   161							</div>
+   162						</div>
+   163					</div>
+   164	
+   165					{/* Right: Chat-style */}
+   166					<div class="flex-1 border border-border bg-th-surface flex flex-col h-[340px]">
+   167						{/* Messages area */}
+   168						<div class="flex-1 p-4 overflow-y-auto space-y-3">
+   169							<Show
+   170								when={messages().length > 0}
+   171								fallback={
+   172									<div class="h-full flex items-center justify-center">
+   173										<span class="font-mono text-sm text-txt-muted">
+   174											{t("onboarding.learningPlaceholder")}
+   175										</span>
+   176									</div>
+   177								}
+   178							>
+   179								<For each={messages()}>
+   180									{(msg) => (
+   181										<div class="flex justify-end">
+   182											<div class="max-w-[80%] px-4 py-2 rounded-2xl rounded-br-sm bg-ac text-ac-on font-mono text-sm">
+   183												{msg}
+   184											</div>
+   185										</div>
+   186									)}
+   187								</For>
+   188							</Show>
+   189						</div>
+   190	
+   191						{/* Input area */}
+   192						<div class="border-t border-border p-3 flex items-center gap-2">
+   193							<input
+   194								ref={inputRef}
+   195								type="text"
+   196								value={inputText()}
+   197								onInput={(e) => setInputText(e.currentTarget.value)}
+   198								placeholder={t("onboarding.learningPlaceholder")}
+   199								class="flex-1 px-4 py-2 rounded-full bg-th-base border border-border font-mono text-sm text-txt-primary placeholder:text-txt-muted focus:outline-none focus:border-ac"
+   200							/>
+   201							<button
+   202								type="button"
+   203								onClick={addMessage}
+   204								class="w-9 h-9 rounded-full bg-ac text-ac-on flex items-center justify-center hover:bg-ac-hover transition-colors disabled:opacity-30"
+   205								disabled={!inputText()}
+   206							>
+   207								<Send class="w-4 h-4" />
+   208							</button>
+   209						</div>
+   210					</div>
+   211				</div>
+   212			</div>
+   213		);
+   214	}
+===== components/onboarding/steps/MicrophonePermissionStep.tsx =====
+     1	import { Result } from "better-result";
+     2	import { AlertCircle, Check, Mic } from "lucide-solid";
+     3	import { Show, createSignal, onMount } from "solid-js";
+     4	import { useI18n } from "../../../i18n";
+     5	
+     6	interface MicrophonePermissionStepProps {
+     7		onPermissionChange: (granted: boolean) => void;
+     8	}
+     9	
+    10	export default function MicrophonePermissionStep(props: MicrophonePermissionStepProps) {
+    11		const [t] = useI18n();
+    12		const [isGranted, setIsGranted] = createSignal<boolean | null>(null);
+    13		const [isRequesting, setIsRequesting] = createSignal(false);
+    14	
+    15		const checkPermission = async () => {
+    16			const result = await Result.tryPromise(() =>
+    17				navigator.permissions.query({
+    18					name: "microphone" as PermissionName,
+    19				})
+    20			);
+    21			if (Result.isError(result)) {
+    22				setIsGranted(false);
+    23				props.onPermissionChange(false);
+    24				return;
+    25			}
+    26			const granted = result.value.state === "granted";
+    27			setIsGranted(granted);
+    28			props.onPermissionChange(granted);
+    29		};
+    30	
+    31		onMount(() => {
+    32			checkPermission();
+    33		});
+    34	
+    35		const handleRequest = async () => {
+    36			setIsRequesting(true);
+    37			const stream = await Result.tryPromise(() =>
+    38				navigator.mediaDevices.getUserMedia({ audio: true })
+    39			);
+    40			if (Result.isOk(stream)) {
+    41				for (const track of stream.value.getTracks()) {
+    42					track.stop();
+    43				}
+    44				setIsGranted(true);
+    45				props.onPermissionChange(true);
+    46			} else {
+    47				setIsGranted(false);
+    48				props.onPermissionChange(false);
+    49			}
+    50			setIsRequesting(false);
+    51		};
+    52	
+    53		return (
+    54			<div class="text-center max-w-md mx-auto">
+    55				{/* Terminal-style header */}
+    56				<div class="font-mono text-ac text-sm mb-8 tracking-wider">[STEP_01] &gt; MIC_PERMISSION</div>
+    57	
+    58				{/* Card container */}
+    59				<div class="border border-border bg-th-surface p-8">
+    60					<div class="w-16 h-16 border border-border-strong flex items-center justify-center mx-auto mb-6">
+    61						<Mic class="w-8 h-8 text-ac" />
+    62					</div>
+    63	
+    64					<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-3">
+    65						{t("onboarding.micPermissionTitle")}
+    66					</h2>
+    67	
+    68					<p class="font-mono text-sm text-txt-secondary mb-8">
+    69						{t("onboarding.micPermissionDescription")}
+    70					</p>
+    71	
+    72					<div class="mb-6">
+    73						<Show when={isGranted() === null}>
+    74							<div class="flex items-center justify-center gap-2 font-mono text-sm text-txt-muted">
+    75								<div class="w-4 h-4 border-2 border-txt-muted border-t-transparent rounded-full animate-spin" />
+    76								<span>{t("onboarding.checkingPermission")}</span>
+    77							</div>
+    78						</Show>
+    79						<Show when={isGranted() === true}>
+    80							<div class="flex items-center justify-center gap-2 font-mono text-sm text-success">
+    81								<Check class="w-5 h-5" />
+    82								<span>{t("onboarding.micPermissionGranted")}</span>
+    83							</div>
+    84						</Show>
+    85						<Show when={isGranted() === false}>
+    86							<div class="flex items-center justify-center gap-2 font-mono text-sm text-ac">
+    87								<AlertCircle class="w-5 h-5" />
+    88								<span>{t("onboarding.micPermissionNotGranted")}</span>
+    89							</div>
+    90						</Show>
+    91					</div>
+    92	
+    93					<Show when={isGranted() !== true}>
+    94						<button
+    95							type="button"
+    96							onClick={handleRequest}
+    97							disabled={isRequesting() || isGranted() === null}
+    98							class="px-6 py-3 bg-ac text-ac-on font-mono font-bold uppercase tracking-wider text-sm hover:bg-ac-hover transition-colors disabled:opacity-30"
+    99						>
+   100							{isRequesting()
+   101								? t("onboarding.checkingPermission")
+   102								: t("onboarding.grantMicPermission")}
+   103						</button>
+   104					</Show>
+   105				</div>
+   106			</div>
+   107		);
+   108	}
+===== components/onboarding/steps/MicrophoneStep.tsx =====
+     1	import { Check, ChevronDown, Mic, RefreshCw } from "lucide-solid";
+     2	import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
+     3	import { useAudioDevices } from "../../../hooks/useAudioDevices";
+     4	import { useI18n } from "../../../i18n";
+     5	import { updateMicrophone, useSettings } from "../../../lib/settingsStore";
+     6	
+     7	interface SelectOption {
+     8		value: string;
+     9		label: string;
+    10	}
+    11	
+    12	interface SelectProps {
+    13		value: string;
+    14		options: SelectOption[];
+    15		onChange: (value: string) => void;
+    16		placeholder?: string;
+    17	}
+    18	
+    19	function Select(props: SelectProps) {
+    20		const [isOpen, setIsOpen] = createSignal(false);
+    21		let containerRef: HTMLDivElement | undefined;
+    22	
+    23		const selectedLabel = () => {
+    24			const option = props.options.find((o) => o.value === props.value);
+    25			return option?.label ?? props.placeholder ?? "";
+    26		};
+    27	
+    28		const handleClickOutside = (e: MouseEvent) => {
+    29			if (containerRef && !containerRef.contains(e.target as Node)) {
+    30				setIsOpen(false);
+    31			}
+    32		};
+    33	
+    34		createEffect(() => {
+    35			if (isOpen()) {
+    36				document.addEventListener("click", handleClickOutside);
+    37			} else {
+    38				document.removeEventListener("click", handleClickOutside);
+    39			}
+    40		});
+    41	
+    42		onCleanup(() => {
+    43			document.removeEventListener("click", handleClickOutside);
+    44		});
+    45	
+    46		return (
+    47			<div ref={containerRef} class="relative">
+    48				<button
+    49					type="button"
+    50					onClick={() => setIsOpen(!isOpen())}
+    51					class="flex items-center justify-between w-full px-4 py-3 bg-th-base border border-border-strong text-txt-primary hover:border-ac focus:outline-none focus:border-ac transition-colors font-mono text-sm"
+    52				>
+    53					<span class="truncate">{selectedLabel()}</span>
+    54					<ChevronDown
+    55						class={`w-5 h-5 ml-2 text-txt-muted transition-transform ${isOpen() ? "rotate-180" : ""}`}
+    56					/>
+    57				</button>
+    58	
+    59				<Show when={isOpen()}>
+    60					<div class="absolute z-50 w-full mt-1 bg-th-surface border border-border-strong max-h-60 overflow-auto">
+    61						<For each={props.options}>
+    62							{(option) => (
+    63								<button
+    64									type="button"
+    65									onClick={() => {
+    66										props.onChange(option.value);
+    67										setIsOpen(false);
+    68									}}
+    69									class={`flex items-center justify-between w-full px-4 py-3 text-left hover:bg-th-hover transition-colors font-mono text-sm ${
+    70										option.value === props.value ? "bg-ac-bg text-ac" : "text-txt-primary"
+    71									}`}
+    72								>
+    73									<span class="truncate">{option.label}</span>
+    74									<Show when={option.value === props.value}>
+    75										<Check class="w-4 h-4 text-ac" />
+    76									</Show>
+    77								</button>
+    78							)}
+    79						</For>
+    80					</div>
+    81				</Show>
+    82			</div>
+    83		);
+    84	}
+    85	
+    86	export default function MicrophoneStep() {
+    87		const [t] = useI18n();
+    88		const settings = useSettings();
+    89		const { devices, isLoading, fetchDevices } = useAudioDevices();
+    90	
+    91		createEffect(() => {
+    92			fetchDevices();
+    93		});
+    94	
+    95		const microphoneOptions = (): SelectOption[] => {
+    96			const deviceList = devices();
+    97			const defaultDevice = deviceList.find((d) => d.isDefault);
+    98			const otherDevices = deviceList.filter((d) => !d.isDefault);
+    99	
+   100			return [
+   101				{
+   102					value: "default",
+   103					label: defaultDevice
+   104						? `${t("settings.defaultMicrophone")} (${defaultDevice.name})`
+   105						: t("settings.defaultMicrophone"),
+   106				},
+   107				...otherDevices.map((device) => ({
+   108					value: device.name,
+   109					label: device.name,
+   110				})),
+   111			];
+   112		};
+   113	
+   114		return (
+   115			<div class="text-center max-w-md mx-auto">
+   116				{/* Terminal-style header */}
+   117				<div class="font-mono text-ac text-sm mb-8 tracking-wider">
+   118					[STEP_03] &gt; MICROPHONE_SELECT
+   119				</div>
+   120	
+   121				{/* Card container */}
+   122				<div class="border border-border bg-th-surface p-8">
+   123					<div class="w-16 h-16 border border-border-strong flex items-center justify-center mx-auto mb-6">
+   124						<Mic class="w-8 h-8 text-ac" />
+   125					</div>
+   126	
+   127					<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-3">
+   128						{t("onboarding.microphoneTitle")}
+   129					</h2>
+   130	
+   131					<p class="font-mono text-sm text-txt-secondary mb-8">
+   132						{t("onboarding.microphoneDescription")}
+   133					</p>
+   134	
+   135					<div class="space-y-3">
+   136						<div class="flex items-center justify-end">
+   137							<button
+   138								type="button"
+   139								onClick={fetchDevices}
+   140								disabled={isLoading()}
+   141								class="flex items-center gap-2 px-3 py-1.5 font-mono text-xs text-txt-muted hover:text-ac border border-transparent hover:border-border-strong transition-colors disabled:opacity-50 uppercase tracking-wider"
+   142							>
+   143								<RefreshCw class={`w-4 h-4 ${isLoading() ? "animate-spin" : ""}`} />
+   144								{t("onboarding.refreshDevices")}
+   145							</button>
+   146						</div>
+   147	
+   148						<Select
+   149							value={settings().selectedMicrophoneId ?? "default"}
+   150							options={microphoneOptions()}
+   151							onChange={(value) => {
+   152								updateMicrophone(value === "default" ? null : value);
+   153							}}
+   154							placeholder={t("onboarding.selectMicrophone")}
+   155						/>
+   156					</div>
+   157				</div>
+   158			</div>
+   159		);
+   160	}
+===== components/onboarding/steps/ModelDownloadStep.tsx =====
+     1	import { listen } from "@tauri-apps/api/event";
+     2	import { Result } from "better-result";
+     3	import { AlertCircle, Check, Download, Loader } from "lucide-solid";
+     4	import { Show, createSignal, onCleanup, onMount } from "solid-js";
+     5	import { useI18n } from "../../../i18n";
+     6	import {
+     7		DEFAULT_MODEL_ID,
+     8		type ModelDownloadProgress,
+     9		checkModelStatus,
+    10		downloadWhisperModel,
+    11	} from "../../../lib/commands/model";
+    12	
+    13	interface ModelDownloadStepProps {
+    14		onDownloadComplete: () => void;
+    15	}
+    16	
+    17	export default function ModelDownloadStep(props: ModelDownloadStepProps) {
+    18		const [t] = useI18n();
+    19		const [downloadProgress, setDownloadProgress] = createSignal(0);
+    20		const [isDownloading, setIsDownloading] = createSignal(false);
+    21		const [isDownloaded, setIsDownloaded] = createSignal(false);
+    22		const [error, setError] = createSignal<string | null>(null);
+    23		const downloadSize = "~1.5 GB";
+    24	
+    25		onMount(async () => {
+    26			const downloaded = await checkModelStatus();
+    27			if (Result.isOk(downloaded) && downloaded.value) {
+    28				setIsDownloaded(true);
+    29				setDownloadProgress(100);
+    30				props.onDownloadComplete();
+    31			}
+    32	
+    33			const unlisten = await listen<ModelDownloadProgress>("model-download-progress", (event) => {
+    34				if (event.payload.model_id !== DEFAULT_MODEL_ID) return;
+    35				setDownloadProgress(event.payload.progress);
+    36				if (event.payload.progress >= 100) {
+    37					setIsDownloaded(true);
+    38					props.onDownloadComplete();
+    39				}
+    40			});
+    41			onCleanup(() => unlisten());
+    42		});
+    43	
+    44		const handleDownload = async () => {
+    45			setIsDownloading(true);
+    46			setError(null);
+    47	
+    48			const result = await downloadWhisperModel();
+    49			if (Result.isOk(result)) {
+    50				setIsDownloaded(true);
+    51				props.onDownloadComplete();
+    52			} else {
+    53				setError(result.error.message || "Download failed");
+    54				setIsDownloading(false);
+    55			}
+    56		};
+    57	
+    58		return (
+    59			<div class="text-center max-w-md mx-auto">
+    60				<div class="font-mono text-ac text-sm mb-8 tracking-wider">[STEP_05] &gt; DOWNLOAD_MODEL</div>
+    61	
+    62				<div class="border border-border bg-th-surface p-8">
+    63					<div class="w-16 h-16 border border-border-strong flex items-center justify-center mx-auto mb-6">
+    64						<Show when={isDownloaded()} fallback={<Download class="w-8 h-8 text-ac" />}>
+    65							<Check class="w-8 h-8 text-success" />
+    66						</Show>
+    67					</div>
+    68	
+    69					<h2 class="font-mono text-xl uppercase tracking-wider text-txt-primary mb-3">
+    70						{t("onboarding.modelDownloadTitle")}
+    71					</h2>
+    72	
+    73					<p class="font-mono text-sm text-txt-secondary mb-8">
+    74						{t("onboarding.modelDownloadDescription")}
+    75					</p>
+    76	
+    77					<div class="mb-6">
+    78						<Show when={isDownloaded()}>
+    79							<div class="flex items-center justify-center gap-2 font-mono text-sm text-success">
+    80								<Check class="w-5 h-5" />
+    81								<span>{t("onboarding.modelDownloadComplete")}</span>
+    82							</div>
+    83						</Show>
+    84	
+    85						<Show when={isDownloading() && !isDownloaded()}>
+    86							<div class="space-y-3">
+    87								<div class="w-full h-2 bg-border overflow-hidden">
+    88									<div
+    89										class="h-full bg-ac transition-all duration-300"
+    90										style={{ width: `${downloadProgress()}%` }}
+    91									/>
+    92								</div>
+    93								<div class="flex items-center justify-center gap-2 font-mono text-sm text-txt-secondary">
+    94									<Loader class="w-4 h-4 animate-spin" />
+    95									<span>
+    96										{downloadProgress()}% — {t("onboarding.modelDownloading")}
+    97									</span>
+    98								</div>
+    99							</div>
+   100						</Show>
+   101	
+   102						<Show when={!isDownloading() && !isDownloaded()}>
+   103							<div class="font-mono text-xs text-txt-muted mb-4">
+   104								{t("onboarding.modelSize")}: {downloadSize}
+   105							</div>
+   106							<button
+   107								type="button"
+   108								onClick={handleDownload}
+   109								class="px-6 py-3 bg-ac text-ac-on font-mono font-bold uppercase tracking-wider text-sm hover:bg-ac-hover transition-colors"
+   110							>
+   111								{t("onboarding.downloadModel")}
+   112							</button>
+   113						</Show>
+   114	
+   115						<Show when={error()}>
+   116							<div class="flex items-center justify-center gap-2 font-mono text-sm text-ac mt-3">
+   117								<AlertCircle class="w-4 h-4" />
+   118								<span>{error()}</span>
+   119							</div>
+   120							<button
+   121								type="button"
+   122								onClick={handleDownload}
+   123								class="mt-3 px-4 py-2 border border-ac text-ac font-mono text-xs uppercase tracking-wider hover:bg-ac hover:text-ac-on transition-colors"
+   124							>
+   125								{t("onboarding.retryDownload")}
+   126							</button>
+   127						</Show>
+   128					</div>
+   129	
+   130					<div class="mt-6 pt-4 border-t border-border">
+   131						<p class="font-mono text-xs text-txt-muted">{t("onboarding.modelDownloadNote")}</p>
+   132					</div>
+   133				</div>
+   134			</div>
+   135		);
+   136	}
+===== pages/Home.tsx =====
+     1	import { onMount } from "solid-js";
+     2	import TranscriptionList from "../components/TranscriptionList";
+     3	import { useI18n } from "../i18n";
+     4	import { capture } from "../lib/posthog";
+     5	
+     6	export default function Home() {
+     7		const [t] = useI18n();
+     8	
+     9		onMount(() => {
+    10			capture("$pageview", { $current_url: "/" });
+    11		});
+    12	
+    13		return (
+    14			<div class="min-h-screen px-6 py-8">
+    15				<div class="max-w-2xl mx-auto">
+    16					<div class="flex items-center gap-3 mb-6">
+    17						<span class="text-ac font-mono text-sm">[HOME]</span>
+    18						<span class="text-txt-muted font-mono text-sm">&gt;</span>
+    19						<h1 class="text-txt-primary font-mono uppercase tracking-wider text-sm">
+    20							{t("home.yourTranscriptions")}
+    21						</h1>
+    22						<div class="flex-1 h-px bg-border" />
+    23					</div>
+    24	
+    25					<p class="text-txt-muted font-mono text-xs mb-8">{t("home.pressToRecord")}</p>
+    26	
+    27					<TranscriptionList />
+    28				</div>
+    29			</div>
+    30		);
+    31	}
+===== pages/About.tsx =====
+     1	import { useI18n } from "../i18n";
+     2	
+     3	export default function About() {
+     4		const [t] = useI18n();
+     5	
+     6		return (
+     7			<div class="min-h-screen flex items-center justify-center">
+     8				<div class="text-center space-y-8 max-w-2xl px-4">
+     9					<div class="font-mono text-txt-secondary text-sm tracking-wider mb-2">
+    10						[ABOUT] &gt; VOXFUSION
+    11					</div>
+    12					<h1 class="text-5xl font-bold text-ac font-mono uppercase tracking-wider">
+    13						{t("about.title")}
+    14					</h1>
+    15					<div class="bg-th-surface border border-border p-8 space-y-4">
+    16						<p class="text-txt-primary text-lg font-mono">{t("about.welcomeDescription")}</p>
+    17						<p class="text-txt-secondary font-mono">{t("about.navigationDescription")}</p>
+    18					</div>
+    19				</div>
+    20			</div>
+    21		);
+    22	}

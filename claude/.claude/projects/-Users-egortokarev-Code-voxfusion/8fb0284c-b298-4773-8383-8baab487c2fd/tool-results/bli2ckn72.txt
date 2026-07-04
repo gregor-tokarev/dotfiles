@@ -1,0 +1,1278 @@
+===== commands/apps.ts =====
+     1	import { Result } from "better-result";
+     2	import type { CommandResult } from "./invokeResult";
+     3	import { invokeResult } from "./invokeResult";
+     4	
+     5	export type AppStyle = "professional" | "casual" | "agents" | "default";
+     6	
+     7	export const STYLE_LIST: readonly AppStyle[] = ["professional", "casual", "agents", "default"];
+     8	
+     9	export const DEFAULT_STYLE: AppStyle = "default";
+    10	
+    11	export interface InstalledApp {
+    12		name: string;
+    13		bundle_id: string;
+    14		path: string;
+    15		icon_data_url: string | null;
+    16	}
+    17	
+    18	export interface FrontmostApp {
+    19		name: string;
+    20		bundle_id: string;
+    21		url?: string | null;
+    22		domain?: string | null;
+    23	}
+    24	
+    25	export interface AppInstruction {
+    26		id: string;
+    27		bundle_id: string;
+    28		app_name: string;
+    29		style: AppStyle;
+    30		created_at: string;
+    31		updated_at: string;
+    32	}
+    33	
+    34	export interface SiteStyle {
+    35		id: string;
+    36		domain: string;
+    37		style: AppStyle;
+    38		created_at: string;
+    39		updated_at: string;
+    40	}
+    41	
+    42	let installedAppsCache: InstalledApp[] | null = null;
+    43	let installedAppsInflight: Promise<CommandResult<InstalledApp[]>> | null = null;
+    44	
+    45	export function getCachedInstalledApps(): InstalledApp[] | null {
+    46		return installedAppsCache;
+    47	}
+    48	
+    49	export async function listInstalledApps(): Promise<CommandResult<InstalledApp[]>> {
+    50		if (installedAppsCache) return Result.ok(installedAppsCache);
+    51		if (installedAppsInflight) return installedAppsInflight;
+    52		installedAppsInflight = invokeResult<InstalledApp[]>("list_installed_apps").then((result) => {
+    53			if (Result.isOk(result)) installedAppsCache = result.value;
+    54			installedAppsInflight = null;
+    55			return result;
+    56		});
+    57		return installedAppsInflight;
+    58	}
+    59	
+    60	export async function getFrontmostApp(): Promise<CommandResult<FrontmostApp | null>> {
+    61		return invokeResult<FrontmostApp | null>("get_frontmost_app");
+    62	}
+    63	
+    64	export async function listAppInstructions(): Promise<CommandResult<AppInstruction[]>> {
+    65		return invokeResult<AppInstruction[]>("list_app_instructions");
+    66	}
+    67	
+    68	export async function setAppInstruction(
+    69		bundleId: string,
+    70		appName: string,
+    71		style: AppStyle
+    72	): Promise<CommandResult<AppInstruction>> {
+    73		return invokeResult<AppInstruction>("set_app_instruction", {
+    74			bundleId,
+    75			appName,
+    76			style,
+    77		});
+    78	}
+    79	
+    80	export async function deleteAppInstruction(id: string): Promise<CommandResult<void>> {
+    81		return invokeResult<void>("delete_app_instruction", { id });
+    82	}
+    83	
+    84	export async function listSiteStyles(): Promise<CommandResult<SiteStyle[]>> {
+    85		return invokeResult<SiteStyle[]>("list_site_styles");
+    86	}
+    87	
+    88	export async function setSiteStyle(
+    89		domain: string,
+    90		style: AppStyle
+    91	): Promise<CommandResult<SiteStyle>> {
+    92		return invokeResult<SiteStyle>("set_site_style", { domain, style });
+    93	}
+    94	
+    95	export async function deleteSiteStyle(id: string): Promise<CommandResult<void>> {
+    96		return invokeResult<void>("delete_site_style", { id });
+    97	}
+===== commands/audio.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	export interface AudioDeviceCommandResult {
+     5		name: string;
+     6		is_default: boolean;
+     7	}
+     8	
+     9	export async function listAudioDevices(): Promise<CommandResult<AudioDeviceCommandResult[]>> {
+    10		return invokeResult<AudioDeviceCommandResult[]>("list_audio_devices");
+    11	}
+    12	
+    13	export async function startRecordingWithDevice(
+    14		deviceName: string | null
+    15	): Promise<CommandResult<void>> {
+    16		return invokeResult<void>("start_recording_with_device", { deviceName });
+    17	}
+    18	
+    19	export async function stopRecordingWithDevice(): Promise<CommandResult<string>> {
+    20		return invokeResult<string>("stop_recording_with_device");
+    21	}
+===== commands/dictionary.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	export interface DictionaryWord {
+     5		id: string;
+     6		word: string;
+     7		createdAt: string;
+     8		updatedAt: string;
+     9	}
+    10	
+    11	export interface AppDictionaryWord {
+    12		id: string;
+    13		word: string;
+    14		created_at: string;
+    15		updated_at: string;
+    16	}
+    17	
+    18	export interface AppDictionary {
+    19		bundle_id: string;
+    20		app_name: string;
+    21		words: AppDictionaryWord[];
+    22	}
+    23	
+    24	export async function listDictionaryWords(): Promise<CommandResult<DictionaryWord[]>> {
+    25		return invokeResult<DictionaryWord[]>("list_dictionary_words");
+    26	}
+    27	
+    28	export async function addDictionaryWord(word: string): Promise<CommandResult<DictionaryWord>> {
+    29		return invokeResult<DictionaryWord>("add_dictionary_word", { word });
+    30	}
+    31	
+    32	export async function updateDictionaryWord(
+    33		id: string,
+    34		word: string
+    35	): Promise<CommandResult<DictionaryWord>> {
+    36		return invokeResult<DictionaryWord>("update_dictionary_word", { id, word });
+    37	}
+    38	
+    39	export async function deleteDictionaryWord(id: string): Promise<CommandResult<void>> {
+    40		return invokeResult<void>("delete_dictionary_word", { id });
+    41	}
+    42	
+    43	export async function getDictionaryPrompt(): Promise<CommandResult<string | null>> {
+    44		return invokeResult<string | null>("get_dictionary_prompt");
+    45	}
+    46	
+    47	export async function listAppDictionaries(): Promise<CommandResult<AppDictionary[]>> {
+    48		return invokeResult<AppDictionary[]>("list_app_dictionaries");
+    49	}
+    50	
+    51	export async function addAppDictionaryWord(
+    52		bundleId: string,
+    53		appName: string,
+    54		word: string
+    55	): Promise<CommandResult<AppDictionaryWord>> {
+    56		return invokeResult<AppDictionaryWord>("add_app_dictionary_word", {
+    57			bundleId,
+    58			appName,
+    59			word,
+    60		});
+    61	}
+    62	
+    63	export async function updateAppDictionaryWord(
+    64		id: string,
+    65		word: string
+    66	): Promise<CommandResult<AppDictionaryWord>> {
+    67		return invokeResult<AppDictionaryWord>("update_app_dictionary_word", { id, word });
+    68	}
+    69	
+    70	export async function deleteAppDictionaryWord(id: string): Promise<CommandResult<void>> {
+    71		return invokeResult<void>("delete_app_dictionary_word", { id });
+    72	}
+    73	
+    74	export async function deleteAppDictionary(bundleId: string): Promise<CommandResult<void>> {
+    75		return invokeResult<void>("delete_app_dictionary", { bundleId });
+    76	}
+    77	
+    78	export interface SiteDictionaryWord {
+    79		id: string;
+    80		word: string;
+    81		created_at: string;
+    82		updated_at: string;
+    83	}
+    84	
+    85	export interface SiteDictionary {
+    86		domain: string;
+    87		words: SiteDictionaryWord[];
+    88	}
+    89	
+    90	export async function listSiteDictionaries(): Promise<CommandResult<SiteDictionary[]>> {
+    91		return invokeResult<SiteDictionary[]>("list_site_dictionaries");
+    92	}
+    93	
+    94	export async function addSiteDictionaryWord(
+    95		domain: string,
+    96		word: string
+    97	): Promise<CommandResult<SiteDictionaryWord>> {
+    98		return invokeResult<SiteDictionaryWord>("add_site_dictionary_word", { domain, word });
+    99	}
+   100	
+   101	export async function updateSiteDictionaryWord(
+   102		id: string,
+   103		word: string
+   104	): Promise<CommandResult<SiteDictionaryWord>> {
+   105		return invokeResult<SiteDictionaryWord>("update_site_dictionary_word", { id, word });
+   106	}
+   107	
+   108	export async function deleteSiteDictionaryWord(id: string): Promise<CommandResult<void>> {
+   109		return invokeResult<void>("delete_site_dictionary_word", { id });
+   110	}
+   111	
+   112	export async function deleteSiteDictionary(domain: string): Promise<CommandResult<void>> {
+   113		return invokeResult<void>("delete_site_dictionary", { domain });
+   114	}
+===== commands/invokeResult.ts =====
+     1	import { invoke } from "@tauri-apps/api/core";
+     2	import { Result, type Result as ResultType } from "better-result";
+     3	import { type CommandError, commandError } from "../errors";
+     4	
+     5	export type CommandResult<T> = ResultType<T, CommandError>;
+     6	
+     7	export function invokeResult<T>(
+     8		command: string,
+     9		args?: Record<string, unknown>
+    10	): Promise<CommandResult<T>> {
+    11		return Result.tryPromise({
+    12			try: () => invoke<T>(command, args),
+    13			catch: (cause) => commandError(command, cause),
+    14		});
+    15	}
+===== commands/media.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	export async function muteMediaForRecording(): Promise<CommandResult<void>> {
+     5		return invokeResult<void>("mute_media_for_recording");
+     6	}
+     7	
+     8	export async function restoreMediaAfterRecording(): Promise<CommandResult<void>> {
+     9		return invokeResult<void>("restore_media_after_recording");
+    10	}
+===== commands/model.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	/** Id of the default Whisper model downloaded during onboarding. */
+     5	export const DEFAULT_MODEL_ID = "whisper-large-v3-turbo";
+     6	
+     7	export type ModelEngine = "whisper" | "parakeet";
+     8	
+     9	/** A transcription model as reported by the backend registry (`list_models`). */
+    10	export interface ModelInfo {
+    11		id: string;
+    12		name: string;
+    13		engine: ModelEngine;
+    14		size_label: string;
+    15		languages: string;
+    16		experimental: boolean;
+    17		recommended: boolean;
+    18		downloaded: boolean;
+    19		active: boolean;
+    20	}
+    21	
+    22	/** Payload of the `model-download-progress` event. */
+    23	export interface ModelDownloadProgress {
+    24		model_id: string;
+    25		progress: number;
+    26	}
+    27	
+    28	export async function checkModelStatus(): Promise<CommandResult<boolean>> {
+    29		return invokeResult<boolean>("check_model_status");
+    30	}
+    31	
+    32	export async function downloadWhisperModel(): Promise<CommandResult<void>> {
+    33		return invokeResult<void>("download_whisper_model");
+    34	}
+    35	
+    36	export async function listModels(): Promise<CommandResult<ModelInfo[]>> {
+    37		return invokeResult<ModelInfo[]>("list_models");
+    38	}
+    39	
+    40	export async function getActiveModel(): Promise<CommandResult<string>> {
+    41		return invokeResult<string>("get_active_model");
+    42	}
+    43	
+    44	export async function setActiveModel(modelId: string): Promise<CommandResult<void>> {
+    45		return invokeResult<void>("set_active_model", { modelId });
+    46	}
+    47	
+    48	export async function downloadModel(modelId: string): Promise<CommandResult<void>> {
+    49		return invokeResult<void>("download_model", { modelId });
+    50	}
+    51	
+    52	export async function checkModelDownloaded(modelId: string): Promise<CommandResult<boolean>> {
+    53		return invokeResult<boolean>("check_model_downloaded", { modelId });
+    54	}
+===== commands/permissions.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	export async function checkAccessibilityProbe(): Promise<CommandResult<boolean>> {
+     5		return invokeResult<boolean>("check_accessibility_probe");
+     6	}
+     7	
+     8	export async function startSystemKeyWatcher(): Promise<CommandResult<void>> {
+     9		return invokeResult<void>("start_system_key_watcher");
+    10	}
+===== commands/text.ts =====
+     1	import type { CommandResult } from "./invokeResult";
+     2	import { invokeResult } from "./invokeResult";
+     3	
+     4	export async function typeText(text: string): Promise<CommandResult<void>> {
+     5		return invokeResult<void>("type_text", { text });
+     6	}
+===== commands/transcriptions.ts =====
+     1	import type { AppStyle } from "./apps";
+     2	import type { CommandResult } from "./invokeResult";
+     3	import { invokeResult } from "./invokeResult";
+     4	
+     5	export interface Transcription {
+     6		id: string;
+     7		text: string;
+     8		word_count: number;
+     9		processing_time_ms: number;
+    10		audio_duration_ms: number | null;
+    11		created_at: string;
+    12	}
+    13	
+    14	export interface TranscriptionPage {
+    15		transcriptions: Transcription[];
+    16		has_more: boolean;
+    17	}
+    18	
+    19	export interface TranscriptionResult {
+    20		text: string;
+    21		word_count: number;
+    22		processing_time_ms: number;
+    23		audio_duration_ms: number | null;
+    24	}
+    25	
+    26	export async function listTranscriptions(
+    27		limit: number,
+    28		cursor: string | null
+    29	): Promise<CommandResult<TranscriptionPage>> {
+    30		return invokeResult<TranscriptionPage>("list_transcriptions", { limit, cursor });
+    31	}
+    32	
+    33	export async function transcribeAudio(
+    34		audioPath: string,
+    35		bundleId: string | null,
+    36		domain: string | null,
+    37		fallbackStyle: AppStyle
+    38	): Promise<CommandResult<TranscriptionResult>> {
+    39		return invokeResult<TranscriptionResult>("transcribe_audio", {
+    40			audioPath,
+    41			bundleId,
+    42			domain,
+    43			fallbackStyle,
+    44		});
+    45	}
+    46	
+    47	export async function saveTranscription(
+    48		result: TranscriptionResult
+    49	): Promise<CommandResult<Transcription>> {
+    50		return invokeResult<Transcription>("save_transcription", {
+    51			text: result.text,
+    52			wordCount: result.word_count,
+    53			processingTimeMs: result.processing_time_ms,
+    54			audioDurationMs: result.audio_duration_ms,
+    55		});
+    56	}
+===== contextMenu.ts =====
+     1	export function disableContextMenu(): void {
+     2		if (import.meta.env.DEV) return;
+     3	
+     4		window.addEventListener("contextmenu", (event) => {
+     5			event.preventDefault();
+     6		});
+     7	}
+===== diagnostics.ts =====
+     1	import {
+     2		debug as logDebug,
+     3		error as logError,
+     4		info as logInfo,
+     5		warn as logWarn,
+     6	} from "@tauri-apps/plugin-log";
+     7	
+     8	type DiagnosticLevel = "debug" | "info" | "warn" | "error";
+     9	type DiagnosticFields = Record<string, unknown>;
+    10	
+    11	export function logDiagnostic(
+    12		level: DiagnosticLevel,
+    13		target: string,
+    14		message: string,
+    15		fields: DiagnosticFields = {}
+    16	): void {
+    17		const logMessage = `${target}.${message}`;
+    18		const options = { keyValues: stringifyFields(fields) };
+    19		const logger = {
+    20			debug: logDebug,
+    21			info: logInfo,
+    22			warn: logWarn,
+    23			error: logError,
+    24		}[level];
+    25	
+    26		void logger(logMessage, options).catch(() => {
+    27			// Logging must never become part of the app's control flow.
+    28		});
+    29	}
+    30	
+    31	export function errorFields(cause: unknown): DiagnosticFields {
+    32		if (cause instanceof Error) {
+    33			return {
+    34				name: cause.name,
+    35				message: cause.message,
+    36				stack: cause.stack,
+    37			};
+    38		}
+    39	
+    40		return {
+    41			message: String(cause),
+    42		};
+    43	}
+    44	
+    45	function stringifyFields(fields: DiagnosticFields): Record<string, string | undefined> {
+    46		return Object.fromEntries(
+    47			Object.entries(fields).map(([key, value]) => [
+    48				key,
+    49				value === undefined ? undefined : serializeField(value),
+    50			])
+    51		);
+    52	}
+    53	
+    54	function serializeField(value: unknown): string {
+    55		if (typeof value === "string") return value;
+    56	
+    57		try {
+    58			return JSON.stringify(value);
+    59		} catch {
+    60			return String(value);
+    61		}
+    62	}
+===== errors.ts =====
+     1	import { Result, TaggedError, type UnhandledException } from "better-result";
+     2	
+     3	export type AppError = CommandError | StorageError | BrowserStorageError | UnhandledException;
+     4	
+     5	export class CommandError extends TaggedError("CommandError")<{
+     6		command: string;
+     7		cause: unknown;
+     8		message: string;
+     9	}>() {}
+    10	
+    11	export class StorageError extends TaggedError("StorageError")<{
+    12		operation: string;
+    13		cause: unknown;
+    14		message: string;
+    15	}>() {}
+    16	
+    17	export class BrowserStorageError extends TaggedError("BrowserStorageError")<{
+    18		key: string;
+    19		cause: unknown;
+    20		message: string;
+    21	}>() {}
+    22	
+    23	export function errorMessage(error: unknown): string {
+    24		if (error instanceof Error) return error.message;
+    25		if (typeof error === "string") return error;
+    26		return "Unexpected error";
+    27	}
+    28	
+    29	export function commandError(command: string, cause: unknown): CommandError {
+    30		return new CommandError({
+    31			command,
+    32			cause,
+    33			message: `${command} failed: ${errorMessage(cause)}`,
+    34		});
+    35	}
+    36	
+    37	export function storageError(operation: string, cause: unknown): StorageError {
+    38		return new StorageError({
+    39			operation,
+    40			cause,
+    41			message: `${operation} failed: ${errorMessage(cause)}`,
+    42		});
+    43	}
+    44	
+    45	export function saveBrowserValue(key: string, value: string) {
+    46		return Result.try({
+    47			try: () => localStorage.setItem(key, value),
+    48			catch: (cause) =>
+    49				new BrowserStorageError({
+    50					key,
+    51					cause,
+    52					message: `Failed to save ${key}: ${errorMessage(cause)}`,
+    53				}),
+    54		});
+    55	}
+===== favicons.ts =====
+     1	const preloaded = new Set<string>();
+     2	
+     3	export function getFaviconUrl(domain: string): string {
+     4		return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+     5	}
+     6	
+     7	export function preloadFavicon(domain: string): void {
+     8		if (preloaded.has(domain)) return;
+     9		preloaded.add(domain);
+    10		const img = new Image();
+    11		img.decoding = "async";
+    12		img.src = getFaviconUrl(domain);
+    13	}
+    14	
+    15	export function preloadFavicons(domains: Iterable<string>): void {
+    16		for (const domain of domains) preloadFavicon(domain);
+    17	}
+===== onboarding.ts =====
+     1	export const ONBOARDING_STEP_COUNT = 7;
+     2	export const CURRENT_ONBOARDING_VERSION = 3;
+     3	export const MODEL_DOWNLOAD_STEP = 5;
+     4	
+     5	export function normalizeOnboardingStep(
+     6		step: number,
+     7		onboardingComplete: boolean,
+     8		onboardingVersion: number
+     9	): number {
+    10		if (onboardingComplete) {
+    11			return 1;
+    12		}
+    13	
+    14		if (onboardingVersion < CURRENT_ONBOARDING_VERSION) {
+    15			return 1;
+    16		}
+    17	
+    18		return Math.min(Math.max(step, 1), ONBOARDING_STEP_COUNT);
+    19	}
+===== posthog.ts =====
+     1	import { getVersion } from "@tauri-apps/api/app";
+     2	import { Result } from "better-result";
+     3	import posthog from "posthog-js";
+     4	
+     5	const POSTHOG_KEY = "phc_n9Bb8O4Xw0diLGriQ4FKjrfHvUnFWDYcwo0fdBbd36m";
+     6	const POSTHOG_HOST = "https://eu.i.posthog.com";
+     7	
+     8	let initialized = false;
+     9	let ready = false;
+    10	const pendingEvents: Array<[string, Record<string, unknown> | undefined]> = [];
+    11	
+    12	async function registerAppVersion() {
+    13		const appVersion = await Result.tryPromise(() => getVersion());
+    14		if (Result.isOk(appVersion)) {
+    15			posthog.register({ app_version: appVersion.value });
+    16		} else {
+    17			console.warn("Failed to register PostHog app version:", appVersion.error);
+    18		}
+    19		ready = true;
+    20		for (const [event, properties] of pendingEvents.splice(0)) {
+    21			posthog.capture(event, properties);
+    22		}
+    23	}
+    24	
+    25	export function initPostHog() {
+    26		if (initialized) return;
+    27		if (!POSTHOG_KEY) return;
+    28	
+    29		posthog.init(POSTHOG_KEY, {
+    30			api_host: POSTHOG_HOST,
+    31			capture_pageview: false,
+    32			capture_pageleave: false,
+    33			persistence: "localStorage",
+    34			autocapture: false,
+    35		});
+    36	
+    37		initialized = true;
+    38		void registerAppVersion();
+    39	}
+    40	
+    41	export function capture(event: string, properties?: Record<string, unknown>) {
+    42		if (!initialized) return;
+    43		if (!ready) {
+    44			pendingEvents.push([event, properties]);
+    45			return;
+    46		}
+    47	
+    48		posthog.capture(event, properties);
+    49	}
+===== settingsStore.ts =====
+     1	import { emit } from "@tauri-apps/api/event";
+     2	import { load } from "@tauri-apps/plugin-store";
+     3	import { Result } from "better-result";
+     4	import { createSignal } from "solid-js";
+     5	import type { Locale } from "../i18n";
+     6	import { type AppStyle, STYLE_LIST } from "./commands/apps";
+     7	import { listAudioDevices } from "./commands/audio";
+     8	import { saveBrowserValue, storageError } from "./errors";
+     9	import {
+    10		CURRENT_ONBOARDING_VERSION,
+    11		ONBOARDING_STEP_COUNT,
+    12		normalizeOnboardingStep,
+    13	} from "./onboarding";
+    14	import { DEFAULT_HOLD_TO_SPEAK_HOTKEY, DEFAULT_HOTKEY } from "./hotkeyUtils";
+    15	
+    16	export type Theme = "dark" | "light" | "system";
+    17	
+    18	export interface Settings {
+    19		theme: Theme;
+    20		hotkey: string;
+    21		holdToSpeakHotkey: string;
+    22		selectedMicrophoneId: string | null;
+    23		language: Locale;
+    24		muteMediaWhileRecording: boolean;
+    25		defaultStyle: AppStyle;
+    26		onboardingComplete: boolean;
+    27		onboardingStep: number;
+    28	}
+    29	
+    30	const DEFAULT_SETTINGS: Settings = {
+    31		theme: "system",
+    32		hotkey: DEFAULT_HOTKEY,
+    33		holdToSpeakHotkey: DEFAULT_HOLD_TO_SPEAK_HOTKEY,
+    34		selectedMicrophoneId: null,
+    35		language: "en",
+    36		muteMediaWhileRecording: false,
+    37		defaultStyle: "default",
+    38		onboardingComplete: false,
+    39		onboardingStep: 1,
+    40	};
+    41	
+    42	const STORE_NAME = "settings.json";
+    43	
+    44	let storeInstance: Awaited<ReturnType<typeof load>> | null = null;
+    45	
+    46	async function getStore() {
+    47		if (!storeInstance) {
+    48			storeInstance = await load(STORE_NAME, {
+    49				defaults: {
+    50					theme: DEFAULT_SETTINGS.theme,
+    51					hotkey: DEFAULT_SETTINGS.hotkey,
+    52					holdToSpeakHotkey: DEFAULT_SETTINGS.holdToSpeakHotkey,
+    53					selectedMicrophoneId: DEFAULT_SETTINGS.selectedMicrophoneId,
+    54					language: DEFAULT_SETTINGS.language,
+    55					muteMediaWhileRecording: DEFAULT_SETTINGS.muteMediaWhileRecording,
+    56					defaultStyle: DEFAULT_SETTINGS.defaultStyle,
+    57					onboardingComplete: DEFAULT_SETTINGS.onboardingComplete,
+    58					onboardingStep: DEFAULT_SETTINGS.onboardingStep,
+    59					onboardingVersion: CURRENT_ONBOARDING_VERSION,
+    60				},
+    61				autoSave: 500,
+    62			});
+    63		}
+    64		return storeInstance;
+    65	}
+    66	
+    67	export async function loadSettings(): Promise<Settings> {
+    68		const store = await getStore();
+    69		const theme = await store.get<Theme>("theme");
+    70		const hotkey = await store.get<string>("hotkey");
+    71		const holdToSpeakHotkey = await store.get<string>("holdToSpeakHotkey");
+    72		const selectedMicrophoneId = await store.get<string | null>("selectedMicrophoneId");
+    73		const language = await store.get<Locale>("language");
+    74		const muteMediaWhileRecording = await store.get<boolean>("muteMediaWhileRecording");
+    75		const storedDefaultStyle = await store.get<AppStyle>("defaultStyle");
+    76		const defaultStyle =
+    77			storedDefaultStyle && STYLE_LIST.includes(storedDefaultStyle)
+    78				? storedDefaultStyle
+    79				: DEFAULT_SETTINGS.defaultStyle;
+    80		const onboardingComplete = await store.get<boolean>("onboardingComplete");
+    81		const onboardingStep = await store.get<number>("onboardingStep");
+    82		const onboardingVersion = await store.get<number>("onboardingVersion");
+    83		const normalizedOnboardingStep = normalizeOnboardingStep(
+    84			onboardingStep ?? DEFAULT_SETTINGS.onboardingStep,
+    85			onboardingComplete ?? DEFAULT_SETTINGS.onboardingComplete,
+    86			onboardingVersion ?? 1
+    87		);
+    88	
+    89		if (normalizedOnboardingStep !== (onboardingStep ?? DEFAULT_SETTINGS.onboardingStep)) {
+    90			await store.set("onboardingStep", normalizedOnboardingStep);
+    91		}
+    92		if ((onboardingVersion ?? 1) !== CURRENT_ONBOARDING_VERSION) {
+    93			await store.set("onboardingVersion", CURRENT_ONBOARDING_VERSION);
+    94		}
+    95	
+    96		return {
+    97			theme: theme ?? DEFAULT_SETTINGS.theme,
+    98			hotkey: hotkey ?? DEFAULT_SETTINGS.hotkey,
+    99			holdToSpeakHotkey: holdToSpeakHotkey ?? DEFAULT_SETTINGS.holdToSpeakHotkey,
+   100			selectedMicrophoneId: selectedMicrophoneId ?? DEFAULT_SETTINGS.selectedMicrophoneId,
+   101			language: language ?? DEFAULT_SETTINGS.language,
+   102			muteMediaWhileRecording: muteMediaWhileRecording ?? DEFAULT_SETTINGS.muteMediaWhileRecording,
+   103			defaultStyle,
+   104			onboardingComplete: onboardingComplete ?? DEFAULT_SETTINGS.onboardingComplete,
+   105			onboardingStep: normalizedOnboardingStep,
+   106		};
+   107	}
+   108	
+   109	export async function saveTheme(theme: Theme): Promise<void> {
+   110		const store = await getStore();
+   111		await store.set("theme", theme);
+   112		saveBrowserValue("voxfusion-theme", theme);
+   113	}
+   114	
+   115	export async function saveHotkey(hotkey: string): Promise<void> {
+   116		const store = await getStore();
+   117		await store.set("hotkey", hotkey);
+   118	}
+   119	
+   120	export async function saveHoldToSpeakHotkey(hotkey: string): Promise<void> {
+   121		const store = await getStore();
+   122		await store.set("holdToSpeakHotkey", hotkey);
+   123	}
+   124	
+   125	export async function saveMicrophone(microphoneId: string | null): Promise<void> {
+   126		const store = await getStore();
+   127		await store.set("selectedMicrophoneId", microphoneId);
+   128	}
+   129	
+   130	export async function saveLanguage(language: Locale): Promise<void> {
+   131		const store = await getStore();
+   132		await store.set("language", language);
+   133	}
+   134	
+   135	export async function saveMuteMediaWhileRecording(enabled: boolean): Promise<void> {
+   136		const store = await getStore();
+   137		await store.set("muteMediaWhileRecording", enabled);
+   138	}
+   139	
+   140	export async function saveDefaultStyle(style: AppStyle): Promise<void> {
+   141		const store = await getStore();
+   142		await store.set("defaultStyle", style);
+   143	}
+   144	
+   145	export interface AudioDevice {
+   146		name: string;
+   147		isDefault: boolean;
+   148	}
+   149	
+   150	export async function getAudioInputDevices(): Promise<AudioDevice[]> {
+   151		const devices = await listAudioDevices();
+   152		if (Result.isError(devices)) return [];
+   153		return devices.value.map((device) => ({
+   154			name: device.name,
+   155			isDefault: device.is_default,
+   156		}));
+   157	}
+   158	
+   159	const [settings, setSettingsInternal] = createSignal<Settings>(DEFAULT_SETTINGS);
+   160	
+   161	export function useSettings() {
+   162		return settings;
+   163	}
+   164	
+   165	export async function initSettings(): Promise<void> {
+   166		const loaded = await loadSettings();
+   167		setSettingsInternal(loaded);
+   168		applyTheme(loaded.theme);
+   169		saveBrowserValue("voxfusion-theme", loaded.theme);
+   170	}
+   171	
+   172	export async function updateTheme(theme: Theme): Promise<void> {
+   173		await saveTheme(theme);
+   174		setSettingsInternal((prev) => ({ ...prev, theme }));
+   175		applyTheme(theme);
+   176		await emit("settings-changed");
+   177	}
+   178	
+   179	export async function updateHotkey(hotkey: string): Promise<void> {
+   180		await saveHotkey(hotkey);
+   181		setSettingsInternal((prev) => ({ ...prev, hotkey }));
+   182		await emit("settings-changed");
+   183	}
+   184	
+   185	export async function updateHoldToSpeakHotkey(hotkey: string): Promise<void> {
+   186		await saveHoldToSpeakHotkey(hotkey);
+   187		setSettingsInternal((prev) => ({ ...prev, holdToSpeakHotkey: hotkey }));
+   188		await emit("settings-changed");
+   189	}
+   190	
+   191	export async function updateMicrophone(microphoneId: string | null): Promise<void> {
+   192		await saveMicrophone(microphoneId);
+   193		setSettingsInternal((prev) => ({ ...prev, selectedMicrophoneId: microphoneId }));
+   194		await emit("settings-changed");
+   195	}
+   196	
+   197	export async function updateLanguage(
+   198		language: Locale,
+   199		setLocale: (locale: Locale) => void
+   200	): Promise<void> {
+   201		await saveLanguage(language);
+   202		setSettingsInternal((prev) => ({ ...prev, language }));
+   203		setLocale(language);
+   204	}
+   205	
+   206	export async function updateMuteMediaWhileRecording(enabled: boolean): Promise<void> {
+   207		await saveMuteMediaWhileRecording(enabled);
+   208		setSettingsInternal((prev) => ({ ...prev, muteMediaWhileRecording: enabled }));
+   209		await emit("settings-changed");
+   210	}
+   211	
+   212	export async function updateDefaultStyle(style: AppStyle): Promise<void> {
+   213		await saveDefaultStyle(style);
+   214		setSettingsInternal((prev) => ({ ...prev, defaultStyle: style }));
+   215		await emit("settings-changed");
+   216	}
+   217	
+   218	function applyTheme(theme: Theme): void {
+   219		const root = document.documentElement;
+   220	
+   221		if (theme === "system") {
+   222			const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+   223			root.classList.toggle("dark", prefersDark);
+   224		} else {
+   225			root.classList.toggle("dark", theme === "dark");
+   226		}
+   227	}
+   228	
+   229	if (typeof window !== "undefined") {
+   230		window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+   231			const currentSettings = settings();
+   232			if (currentSettings.theme === "system") {
+   233				applyTheme("system");
+   234			}
+   235		});
+   236	}
+   237	
+   238	export async function updateOnboardingStep(step: number): Promise<void> {
+   239		const store = await getStore();
+   240		await store.set("onboardingStep", step);
+   241		await store.save();
+   242		setSettingsInternal((prev) => ({ ...prev, onboardingStep: step }));
+   243	}
+   244	
+   245	export async function markOnboardingComplete(): Promise<void> {
+   246		setSettingsInternal((prev) => ({ ...prev, onboardingComplete: true, onboardingStep: 1 }));
+   247		const result = await Result.tryPromise({
+   248			try: async () => {
+   249				const store = await getStore();
+   250				await store.set("onboardingComplete", true);
+   251				await store.set("onboardingStep", 1);
+   252				await store.save();
+   253				await emit("settings-changed");
+   254			},
+   255			catch: (cause) => storageError("persist onboarding completion", cause),
+   256		});
+   257		if (Result.isError(result)) {
+   258			console.error("Failed to persist onboarding completion:", result.error);
+   259		}
+   260	}
+   261	
+   262	export async function resetOnboarding(): Promise<void> {
+   263		const store = await getStore();
+   264		await store.set("onboardingComplete", false);
+   265		setSettingsInternal((prev) => ({ ...prev, onboardingComplete: false }));
+   266	}
+   267	
+   268	export async function resumeOnboardingAt(step: number): Promise<void> {
+   269		const clamped = Math.min(Math.max(step, 1), ONBOARDING_STEP_COUNT);
+   270		setSettingsInternal((prev) => ({
+   271			...prev,
+   272			onboardingComplete: false,
+   273			onboardingStep: clamped,
+   274		}));
+   275		const result = await Result.tryPromise({
+   276			try: async () => {
+   277				const store = await getStore();
+   278				await store.set("onboardingComplete", false);
+   279				await store.set("onboardingStep", clamped);
+   280				await store.save();
+   281				await emit("settings-changed");
+   282			},
+   283			catch: (cause) => storageError("persist onboarding resume", cause),
+   284		});
+   285		if (Result.isError(result)) {
+   286			console.error("Failed to persist onboarding resume:", result.error);
+   287		}
+   288	}
+===== hotkeyUtils.ts =====
+     1	import { listen } from "@tauri-apps/api/event";
+     2	import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
+     3	import { Result } from "better-result";
+     4	import { startSystemKeyWatcher } from "./commands/permissions";
+     5	
+     6	type SystemKey =
+     7		| "fn"
+     8		| "leftControl"
+     9		| "rightControl"
+    10		| "leftOption"
+    11		| "rightOption"
+    12		| "leftCommand"
+    13		| "rightCommand";
+    14	
+    15	type SystemKeyPressedPayload = {
+    16		key: SystemKey;
+    17		pressedKeys: SystemKey[];
+    18	};
+    19	
+    20	type SystemKeyReleasedPayload = {
+    21		key: SystemKey;
+    22		pressedKeys: SystemKey[];
+    23	};
+    24	
+    25	type RegisteredHotkey = {
+    26		hotkey: string;
+    27		dispose: () => Promise<void>;
+    28	};
+    29	
+    30	type GlobalShortcutEvent = {
+    31		state: string;
+    32	};
+    33	
+    34	type HotkeyHandler = () => void;
+    35	type HotkeyHandlers = {
+    36		onPressed: HotkeyHandler;
+    37		onReleased?: HotkeyHandler;
+    38	};
+    39	
+    40	type HotkeyRecorderActivePayload = {
+    41		active: boolean;
+    42	};
+    43	
+    44	export const DEFAULT_HOTKEY = "LeftControl+LeftOption";
+    45	export const DEFAULT_HOLD_TO_SPEAK_HOTKEY = "RightCommand";
+    46	
+    47	/**
+    48	 * Maps KeyboardEvent.code values to display-friendly modifier labels.
+    49	 * Used during recording to show the user what they're pressing.
+    50	 */
+    51	const CODE_TO_DISPLAY: Record<string, string> = {
+    52		MetaLeft: "Left \u2318",
+    53		MetaRight: "Right \u2318",
+    54		ShiftLeft: "Left \u21E7",
+    55		ShiftRight: "Right \u21E7",
+    56		AltLeft: "Left \u2325",
+    57		AltRight: "Right \u2325",
+    58		ControlLeft: "Left \u2303",
+    59		ControlRight: "Right \u2303",
+    60		CapsLock: "\u21EA Caps Lock",
+    61		Fn: "Fn",
+    62	};
+    63	
+    64	/**
+    65	 * The set of KeyboardEvent.code values that correspond to modifier keys.
+    66	 */
+    67	const MODIFIER_CODES = new Set([
+    68		"MetaLeft",
+    69		"MetaRight",
+    70		"ShiftLeft",
+    71		"ShiftRight",
+    72		"AltLeft",
+    73		"AltRight",
+    74		"ControlLeft",
+    75		"ControlRight",
+    76		"CapsLock",
+    77		"Fn",
+    78	]);
+    79	
+    80	const COMBO_MODIFIER_NAMES = new Set([
+    81		"Command",
+    82		"Cmd",
+    83		"CommandOrControl",
+    84		"CommandOrCtrl",
+    85		"CmdOrCtrl",
+    86		"CmdOrControl",
+    87		"Control",
+    88		"Ctrl",
+    89		"Alt",
+    90		"Option",
+    91		"Shift",
+    92		"CapsLock",
+    93		"Fn",
+    94	]);
+    95	
+    96	const SYSTEM_HOTKEY_TO_KEY: Record<string, SystemKey> = {
+    97		Fn: "fn",
+    98		LeftControl: "leftControl",
+    99		RightControl: "rightControl",
+   100		LeftOption: "leftOption",
+   101		RightOption: "rightOption",
+   102		LeftCommand: "leftCommand",
+   103		RightCommand: "rightCommand",
+   104	};
+   105	
+   106	const SYSTEM_HOTKEY_ORDER = [
+   107		"Fn",
+   108		"LeftControl",
+   109		"RightControl",
+   110		"LeftOption",
+   111		"RightOption",
+   112		"LeftCommand",
+   113		"RightCommand",
+   114	];
+   115	
+   116	const MODIFIER_CODE_TO_SYSTEM_HOTKEY: Record<string, string> = {
+   117		Fn: "Fn",
+   118		ControlLeft: "LeftControl",
+   119		ControlRight: "RightControl",
+   120		AltLeft: "LeftOption",
+   121		AltRight: "RightOption",
+   122		MetaLeft: "LeftCommand",
+   123		MetaRight: "RightCommand",
+   124	};
+   125	
+   126	let registeredDictationHotkey: RegisteredHotkey | null = null;
+   127	let registeredDictationHotkeys: RegisteredHotkey[] = [];
+   128	
+   129	/**
+   130	 * Check if a KeyboardEvent.code is a modifier key.
+   131	 */
+   132	export function isModifierCode(code: string): boolean {
+   133		return MODIFIER_CODES.has(code);
+   134	}
+   135	
+   136	/**
+   137	 * Get the display string for a modifier KeyboardEvent.code during recording.
+   138	 * Returns undefined for non-modifier codes.
+   139	 */
+   140	export function modifierCodeToDisplay(code: string): string | undefined {
+   141		return CODE_TO_DISPLAY[code];
+   142	}
+   143	
+   144	/**
+   145	 * Convert a KeyboardEvent.code modifier into the system-only hotkey string
+   146	 * persisted in settings, when the native watcher supports it.
+   147	 */
+   148	export function modifierCodeToSystemHotkey(code: string): string | undefined {
+   149		return MODIFIER_CODE_TO_SYSTEM_HOTKEY[code];
+   150	}
+   151	
+   152	export function systemHotkeyFromKeys(keys: Iterable<SystemKey>): string {
+   153		const keySet = new Set(keys);
+   154	
+   155		return SYSTEM_HOTKEY_ORDER.filter((part) => {
+   156			const key = SYSTEM_HOTKEY_TO_KEY[part];
+   157			return key !== undefined && keySet.has(key);
+   158		}).join("+");
+   159	}
+   160	
+   161	function systemKeysFromHotkey(hotkey: string): SystemKey[] | undefined {
+   162		const parts = hotkey.split("+");
+   163		if (parts.length === 0) return undefined;
+   164	
+   165		const keys: SystemKey[] = [];
+   166		for (const part of parts) {
+   167			const key = SYSTEM_HOTKEY_TO_KEY[part];
+   168			if (!key) return undefined;
+   169			keys.push(key);
+   170		}
+   171	
+   172		return keys;
+   173	}
+   174	
+   175	function systemKeySetsMatch(a: Iterable<SystemKey>, b: Iterable<SystemKey>): boolean {
+   176		const aSet = new Set(a);
+   177		const bSet = new Set(b);
+   178		if (aSet.size !== bSet.size) return false;
+   179	
+   180		for (const key of aSet) {
+   181			if (!bSet.has(key)) return false;
+   182		}
+   183	
+   184		return true;
+   185	}
+   186	
+   187	/**
+   188	 * Check if a hotkey should be handled by the native system key watcher.
+   189	 */
+   190	export function isSystemOnlyHotkey(hotkey: string): boolean {
+   191		return systemKeysFromHotkey(hotkey) !== undefined;
+   192	}
+   193	
+   194	/**
+   195	 * Check if a hotkey string can be registered by one of the supported backends.
+   196	 */
+   197	export function isValidHotkey(hotkey: string): boolean {
+   198		if (isSystemOnlyHotkey(hotkey)) return true;
+   199	
+   200		const parts = hotkey
+   201			.split("+")
+   202			.map((part) => part.trim())
+   203			.filter(Boolean);
+   204		if (parts.length < 2) return false;
+   205		if (parts.some((part) => part in SYSTEM_HOTKEY_TO_KEY)) return false;
+   206	
+   207		const key = parts[parts.length - 1];
+   208		if (!key || COMBO_MODIFIER_NAMES.has(key)) return false;
+   209	
+   210		return parts.slice(0, -1).every((part) => COMBO_MODIFIER_NAMES.has(part));
+   211	}
+   212	
+   213	async function registerSystemHotkey(
+   214		hotkey: string,
+   215		handlers: HotkeyHandlers
+   216	): Promise<RegisteredHotkey> {
+   217		const expectedKeys = systemKeysFromHotkey(hotkey);
+   218		if (!expectedKeys) {
+   219			throw new Error(`Unsupported system hotkey: ${hotkey}`);
+   220		}
+   221	
+   222		const watcherStarted = await startSystemKeyWatcher();
+   223		if (Result.isError(watcherStarted)) {
+   224			throw watcherStarted.error;
+   225		}
+   226	
+   227		let isHeld = false;
+   228		let isRecorderActive = false;
+   229	
+   230		const unlistenRecorderActive = await listen<HotkeyRecorderActivePayload>(
+   231			"hotkey-recorder-active",
+   232			(event) => {
+   233				isRecorderActive = event.payload.active;
+   234			}
+   235		);
+   236	
+   237		const unlistenPressed = await listen<SystemKeyPressedPayload>("system-key-pressed", (event) => {
+   238			if (!systemKeySetsMatch(event.payload.pressedKeys, expectedKeys)) return;
+   239			if (isHeld) return;
+   240			if (isRecorderActive) return;
+   241	
+   242			isHeld = true;
+   243			handlers.onPressed();
+   244		});
+   245	
+   246		const unlistenReleased = await listen("system-keys-released", () => {
+   247			if (isHeld) handlers.onReleased?.();
+   248			isHeld = false;
+   249		});
+   250	
+   251		const unlistenKeyReleased = await listen<SystemKeyReleasedPayload>(
+   252			"system-key-released",
+   253			(event) => {
+   254				if (systemKeySetsMatch(event.payload.pressedKeys, expectedKeys)) return;
+   255				if (isHeld) handlers.onReleased?.();
+   256				isHeld = false;
+   257			}
+   258		);
+   259	
+   260		return {
+   261			hotkey,
+   262			dispose: async () => {
+   263				unlistenRecorderActive();
+   264				unlistenPressed();
+   265				unlistenKeyReleased();
+   266				unlistenReleased();
+   267			},
+   268		};
+   269	}
+   270	
+   271	async function registerGlobalHotkey(
+   272		hotkey: string,
+   273		handlers: HotkeyHandlers
+   274	): Promise<RegisteredHotkey> {
+   275		await Result.tryPromise(() => unregister(hotkey));
+   276	
+   277		await register(hotkey, (event: GlobalShortcutEvent) => {
+   278			if (event.state === "Pressed") {
+   279				handlers.onPressed();
+   280			} else if (event.state === "Released") {
+   281				handlers.onReleased?.();
+   282			}
+   283		});
+   284	
+   285		return {
+   286			hotkey,
+   287			dispose: async () => {
+   288				await Result.tryPromise(() => unregister(hotkey));
+   289			},
+   290		};
+   291	}
+   292	
+   293	/**
+   294	 * Register the dictation hotkey using the best backend for the configured hotkey.
+   295	 * Combo hotkeys use Tauri global-shortcut; supported system-only hotkeys use
+   296	 * the native macOS system key watcher.
+   297	 */
+   298	export async function registerDictationHotkey(
+   299		hotkey: string,
+   300		handler: HotkeyHandler
+   301	): Promise<void> {
+   302		await unregisterDictationHotkey();
+   303	
+   304		registeredDictationHotkey = isSystemOnlyHotkey(hotkey)
+   305			? await registerSystemHotkey(hotkey, { onPressed: handler })
+   306			: await registerGlobalHotkey(hotkey, { onPressed: handler });
+   307	}
+   308	
+   309	export async function registerDictationHotkeys(
+   310		hotkeys: { hotkey: string; onPressed: HotkeyHandler; onReleased?: HotkeyHandler }[]
+   311	): Promise<void> {
+   312		await unregisterDictationHotkey();
+   313	
+   314		const registered: RegisteredHotkey[] = [];
+   315		const result = await Result.tryPromise(async () => {
+   316			for (const config of hotkeys) {
+   317				registered.push(
+   318					isSystemOnlyHotkey(config.hotkey)
+   319						? await registerSystemHotkey(config.hotkey, config)
+   320						: await registerGlobalHotkey(config.hotkey, config)
+   321				);
+   322			}
+   323		});
+   324		if (Result.isError(result)) {
+   325			for (const registration of registered) {
+   326				await registration.dispose();
+   327			}
+   328			throw result.error;
+   329		}
+   330		registeredDictationHotkeys = registered;
+   331	}
+   332	
+   333	/**
+   334	 * Unregister the currently active dictation hotkey, regardless of backend.
+   335	 */
+   336	export async function unregisterDictationHotkey(): Promise<void> {
+   337		const registered = registeredDictationHotkey;
+   338		const registeredMany = registeredDictationHotkeys;
+   339		if (!registered && registeredMany.length === 0) return;
+   340	
+   341		registeredDictationHotkey = null;
+   342		registeredDictationHotkeys = [];
+   343		if (registered) await registered.dispose();
+   344		for (const registration of registeredMany) {
+   345			await registration.dispose();
+   346		}
+   347	}
+   348	
+   349	/**
+   350	 * Get a user-friendly display name for a hotkey string.
+   351	 * Handles combo shortcuts like "Command+;" by mapping modifier names to symbols.
+   352	 */
+   353	export function hotkeyDisplayName(hotkey: string): string {
+   354		return hotkey
+   355			.replace(/Command/g, "\u2318")
+   356			.replace(/Control/g, "\u2303")
+   357			.replace(/Option/g, "\u2325")
+   358			.replace(/Alt/g, "\u2325")
+   359			.replace(/Shift/g, "\u21E7");
+   360	}
+   361	
+   362	/**
+   363	 * Check if a hotkey is valid for hands-free (press) mode.
+   364	 * Returns null if valid, error message string if invalid.
+   365	 */
+   366	export function validateHandsFreeHotkey(hotkey: string): string | null {
+   367		if (isValidHotkey(hotkey)) return null;
+   368		return "Use modifier keys plus one regular key.";
+   369	}
+   370	
+   371	/**
+   372	 * Check if a hotkey is valid for hold-to-speak mode.
+   373	 * FN alone is not allowed as it conflicts with system functionality.
+   374	 * Returns null if valid, error message string if invalid.
+   375	 */
+   376	export function validateHoldToSpeakHotkey(hotkey: string): string | null {
+   377		if (hotkey === "Fn") {
+   378			return "FN cannot be used as hold-to-speak hotkey";
+   379		}
+   380		return validateHandsFreeHotkey(hotkey);
+   381	}

@@ -1,0 +1,1126 @@
+===== pages/Dictionary.tsx =====
+     1	import { A, useLocation } from "@solidjs/router";
+     2	import type { ParentComponent } from "solid-js";
+     3	import { useI18n } from "../i18n";
+     4	
+     5	const Dictionary: ParentComponent = (props) => {
+     6		const [t] = useI18n();
+     7		const location = useLocation();
+     8	
+     9		const isPerApp = () => location.pathname.startsWith("/dictionary/per-app");
+    10		const isSites = () => location.pathname.startsWith("/dictionary/sites");
+    11		const isDefault = () => !isPerApp() && !isSites();
+    12	
+    13		const tabClass = (active: boolean) =>
+    14			`font-mono text-xs uppercase tracking-wider transition-colors py-2 ${
+    15				active ? "text-ac" : "text-txt-secondary hover:text-txt-primary"
+    16			}`;
+    17	
+    18		return (
+    19			<div class="min-h-screen bg-th-base px-6 py-8">
+    20				<div class="max-w-2xl mx-auto">
+    21					<div class="mb-6">
+    22						<h1 class="font-mono text-txt-primary text-sm">
+    23							<span class="text-ac">[DICTIONARY]</span>
+    24							<span class="text-txt-muted"> {">"} </span>
+    25							<span class="text-txt-secondary">CUSTOM_TERMS</span>
+    26						</h1>
+    27						<p class="text-txt-muted font-mono text-xs mt-2 uppercase tracking-wide">
+    28							{t("dictionary.description")}
+    29						</p>
+    30					</div>
+    31	
+    32					<div class="flex items-center gap-4 border-b border-border mb-6">
+    33						<A href="/dictionary" end class={tabClass(isDefault())}>
+    34							[{t("dictionary.tabDefault")}]
+    35						</A>
+    36						<A href="/dictionary/per-app" class={tabClass(isPerApp())}>
+    37							[{t("dictionary.tabPerApp")}]
+    38						</A>
+    39						<A href="/dictionary/sites" class={tabClass(isSites())}>
+    40							[{t("dictionary.tabSites")}]
+    41						</A>
+    42					</div>
+    43	
+    44					{props.children}
+    45				</div>
+    46			</div>
+    47		);
+    48	};
+    49	
+    50	export default Dictionary;
+===== pages/DictionaryDefault.tsx =====
+     1	import { Result } from "better-result";
+     2	import { For, Show, createSignal, onMount } from "solid-js";
+     3	import { useI18n } from "../i18n";
+     4	import {
+     5		type DictionaryWord,
+     6		addDictionaryWord,
+     7		deleteDictionaryWord,
+     8		listDictionaryWords,
+     9		updateDictionaryWord,
+    10	} from "../lib/commands/dictionary";
+    11	import { capture } from "../lib/posthog";
+    12	
+    13	export default function DictionaryDefault() {
+    14		const [t] = useI18n();
+    15		const [words, setWords] = createSignal<DictionaryWord[]>([]);
+    16		const [newWord, setNewWord] = createSignal("");
+    17		const [adding, setAdding] = createSignal(false);
+    18		const [editingId, setEditingId] = createSignal<string | null>(null);
+    19		const [editingWord, setEditingWord] = createSignal("");
+    20	
+    21		const fetchWords = async () => {
+    22			const result = await listDictionaryWords();
+    23			if (Result.isOk(result)) setWords(result.value);
+    24		};
+    25	
+    26		onMount(() => {
+    27			capture("$pageview", { $current_url: "/dictionary" });
+    28			fetchWords();
+    29		});
+    30	
+    31		const handleAdd = async () => {
+    32			const word = newWord().trim();
+    33			if (!word || adding()) return;
+    34	
+    35			setAdding(true);
+    36			const result = await addDictionaryWord(word);
+    37			if (Result.isOk(result)) {
+    38				capture("dictionary_word_added");
+    39				await fetchWords();
+    40				setNewWord("");
+    41			}
+    42			setAdding(false);
+    43		};
+    44	
+    45		const handleKeyDown = (e: KeyboardEvent) => {
+    46			if (e.key === "Enter") handleAdd();
+    47		};
+    48	
+    49		const handleDelete = async (id: string) => {
+    50			capture("dictionary_word_deleted");
+    51			setWords(words().filter((w) => w.id !== id));
+    52			const result = await deleteDictionaryWord(id);
+    53			if (Result.isError(result)) await fetchWords();
+    54		};
+    55	
+    56		const startEdit = (word: DictionaryWord) => {
+    57			setEditingId(word.id);
+    58			setEditingWord(word.word);
+    59		};
+    60	
+    61		const cancelEdit = () => {
+    62			setEditingId(null);
+    63			setEditingWord("");
+    64		};
+    65	
+    66		const handleEdit = async (id: string) => {
+    67			const word = editingWord().trim();
+    68			if (!word) return;
+    69	
+    70			capture("dictionary_word_edited");
+    71			setWords(words().map((w) => (w.id === id ? { ...w, word } : w)));
+    72			setEditingId(null);
+    73			setEditingWord("");
+    74	
+    75			const result = await updateDictionaryWord(id, word);
+    76			if (Result.isError(result)) await fetchWords();
+    77		};
+    78	
+    79		const handleEditKeyDown = (e: KeyboardEvent, id: string) => {
+    80			if (e.key === "Enter") handleEdit(id);
+    81			else if (e.key === "Escape") cancelEdit();
+    82		};
+    83	
+    84		return (
+    85			<div>
+    86				<div class="mb-4 flex items-center justify-end">
+    87					<Show when={words().length > 0}>
+    88						<span class="text-txt-muted font-mono text-xs uppercase">
+    89							{t("dictionary.wordCount").replace("{count}", String(words().length))}
+    90						</span>
+    91					</Show>
+    92				</div>
+    93	
+    94				<div class="bg-th-surface border border-border p-4 mb-6">
+    95					<div class="flex gap-3">
+    96						<input
+    97							type="text"
+    98							value={newWord()}
+    99							onInput={(e) => setNewWord(e.currentTarget.value)}
+   100							onKeyDown={handleKeyDown}
+   101							placeholder={t("dictionary.wordPlaceholder")}
+   102							class="flex-1 px-4 py-2 bg-th-input border border-border-strong text-txt-primary font-mono placeholder-txt-muted focus:outline-none focus:border-ac transition-colors"
+   103						/>
+   104						<button
+   105							type="button"
+   106							onClick={handleAdd}
+   107							disabled={!newWord().trim() || adding()}
+   108							class="flex items-center gap-2 px-4 py-2 bg-ac text-ac-on font-mono uppercase tracking-wider text-sm hover:bg-ac-hover disabled:opacity-50 transition-colors"
+   109						>
+   110							<span>+</span>
+   111							{t("dictionary.addWord")}
+   112						</button>
+   113					</div>
+   114				</div>
+   115	
+   116				<Show when={words().length === 0}>
+   117					<div class="bg-th-surface border border-border p-12 flex flex-col items-center justify-center text-center">
+   118						<div class="font-mono text-txt-muted text-sm mb-4">
+   119							<span class="text-ac">[INFO]</span> NO_TERMS_FOUND
+   120						</div>
+   121						<p class="text-txt-secondary font-mono text-xs uppercase tracking-wide">
+   122							{t("dictionary.emptyState")}
+   123						</p>
+   124						<p class="text-txt-muted font-mono text-xs mt-2 max-w-sm">
+   125							{t("dictionary.emptyStateDescription")}
+   126						</p>
+   127					</div>
+   128				</Show>
+   129	
+   130				<Show when={words().length > 0}>
+   131					<div class="space-y-1">
+   132						<For each={words()}>
+   133							{(word) => (
+   134								<div class="bg-th-surface border border-border px-4 py-3 flex items-center justify-between group hover:border-border-strong transition-colors">
+   135									<Show
+   136										when={editingId() === word.id}
+   137										fallback={<span class="text-txt-primary font-mono">{word.word}</span>}
+   138									>
+   139										<input
+   140											type="text"
+   141											value={editingWord()}
+   142											onInput={(e) => setEditingWord(e.currentTarget.value)}
+   143											onKeyDown={(e) => handleEditKeyDown(e, word.id)}
+   144											class="flex-1 px-2 py-1 bg-th-input border border-border-strong text-txt-primary font-mono focus:outline-none focus:border-ac transition-colors mr-4"
+   145											autofocus
+   146										/>
+   147									</Show>
+   148	
+   149									<div class="flex items-center gap-2 font-mono text-xs">
+   150										<Show
+   151											when={editingId() === word.id}
+   152											fallback={
+   153												<>
+   154													<button
+   155														type="button"
+   156														onClick={() => startEdit(word)}
+   157														class="text-txt-muted hover:text-ac opacity-0 group-hover:opacity-100 transition-all uppercase tracking-wider"
+   158														title={t("dictionary.edit")}
+   159													>
+   160														[EDIT]
+   161													</button>
+   162													<button
+   163														type="button"
+   164														onClick={() => handleDelete(word.id)}
+   165														class="text-txt-muted hover:text-ac opacity-0 group-hover:opacity-100 transition-all uppercase tracking-wider"
+   166														title={t("dictionary.delete")}
+   167													>
+   168														[DEL]
+   169													</button>
+   170												</>
+   171											}
+   172										>
+   173											<button
+   174												type="button"
+   175												onClick={() => handleEdit(word.id)}
+   176												class="text-success hover:opacity-80 uppercase tracking-wider"
+   177												title={t("dictionary.save")}
+   178											>
+   179												[SAVE]
+   180											</button>
+   181											<button
+   182												type="button"
+   183												onClick={cancelEdit}
+   184												class="text-txt-muted hover:text-txt-secondary uppercase tracking-wider"
+   185												title={t("dictionary.cancel")}
+   186											>
+   187												[CANCEL]
+   188											</button>
+   189										</Show>
+   190									</div>
+   191								</div>
+   192							)}
+   193						</For>
+   194					</div>
+   195				</Show>
+   196			</div>
+   197		);
+   198	}
+===== pages/DictionaryPerApp.tsx =====
+     1	import { Result } from "better-result";
+     2	import { ChevronDown, Search } from "lucide-solid";
+     3	import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+     4	import { useI18n } from "../i18n";
+     5	import { type InstalledApp, getCachedInstalledApps, listInstalledApps } from "../lib/commands/apps";
+     6	import {
+     7		type AppDictionary,
+     8		addAppDictionaryWord,
+     9		deleteAppDictionary,
+    10		deleteAppDictionaryWord,
+    11		listAppDictionaries,
+    12		updateAppDictionaryWord,
+    13	} from "../lib/commands/dictionary";
+    14	import { capture } from "../lib/posthog";
+    15	
+    16	const SKELETON_ROWS = Array.from({ length: 4 });
+    17	
+    18	export default function DictionaryPerApp() {
+    19		const [t] = useI18n();
+    20		const cachedApps = getCachedInstalledApps();
+    21		const [installedApps, setInstalledApps] = createSignal<InstalledApp[]>(cachedApps ?? []);
+    22		const [appDicts, setAppDicts] = createSignal<AppDictionary[]>([]);
+    23		const [pendingApps, setPendingApps] = createSignal<AppDictionary[]>([]);
+    24		const [appsLoading, setAppsLoading] = createSignal(cachedApps === null);
+    25	
+    26		const [searchQuery, setSearchQuery] = createSignal("");
+    27		const [searchOpen, setSearchOpen] = createSignal(false);
+    28		const [highlightedIndex, setHighlightedIndex] = createSignal(0);
+    29	
+    30		const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+    31		const [newWordByApp, setNewWordByApp] = createSignal<Record<string, string>>({});
+    32		const [addingApp, setAddingApp] = createSignal<Set<string>>(new Set());
+    33		const [editingAppWordId, setEditingAppWordId] = createSignal<string | null>(null);
+    34		const [editingAppWord, setEditingAppWord] = createSignal("");
+    35	
+    36		let searchContainerRef: HTMLDivElement | undefined;
+    37		const optionRefs = new Map<number, HTMLButtonElement>();
+    38	
+    39		const fetchAppDicts = async () => {
+    40			const result = await listAppDictionaries();
+    41			if (Result.isOk(result)) setAppDicts(result.value);
+    42		};
+    43	
+    44		onMount(async () => {
+    45			capture("$pageview", { $current_url: "/dictionary/per-app" });
+    46			const apps = await listInstalledApps();
+    47			if (Result.isOk(apps)) setInstalledApps(apps.value);
+    48			else console.error("Failed to load installed apps", apps.error);
+    49			const dicts = await listAppDictionaries();
+    50			if (Result.isOk(dicts)) setAppDicts(dicts.value);
+    51			else console.error("Failed to load app dictionaries", dicts.error);
+    52			setAppsLoading(false);
+    53		});
+    54	
+    55		const allAppGroups = createMemo(() => {
+    56			const persisted = appDicts();
+    57			const persistedIds = new Set(persisted.map((d) => d.bundle_id));
+    58			const pending = pendingApps().filter((p) => !persistedIds.has(p.bundle_id));
+    59			return [...persisted, ...pending];
+    60		});
+    61	
+    62		const configuredBundleIds = createMemo(() => new Set(allAppGroups().map((d) => d.bundle_id)));
+    63	
+    64		const iconByBundleId = createMemo(() => {
+    65			const map = new Map<string, string>();
+    66			for (const app of installedApps()) {
+    67				if (app.icon_data_url) map.set(app.bundle_id, app.icon_data_url);
+    68			}
+    69			return map;
+    70		});
+    71	
+    72		const filteredApps = createMemo(() => {
+    73			const query = searchQuery().trim().toLowerCase();
+    74			const configured = configuredBundleIds();
+    75			return installedApps()
+    76				.filter((app) => !configured.has(app.bundle_id))
+    77				.filter((app) => {
+    78					if (!query) return true;
+    79					return (
+    80						app.name.toLowerCase().includes(query) || app.bundle_id.toLowerCase().includes(query)
+    81					);
+    82				})
+    83				.slice(0, 50);
+    84		});
+    85	
+    86		createEffect(() => {
+    87			filteredApps();
+    88			searchQuery();
+    89			setHighlightedIndex(0);
+    90		});
+    91	
+    92		createEffect(() => {
+    93			if (!searchOpen()) return;
+    94			const el = optionRefs.get(highlightedIndex());
+    95			el?.scrollIntoView({ block: "nearest" });
+    96		});
+    97	
+    98		const handleClickOutside = (e: MouseEvent) => {
+    99			if (searchContainerRef && !searchContainerRef.contains(e.target as Node)) {
+   100				setSearchOpen(false);
+   101			}
+   102		};
+   103	
+   104		createEffect(() => {
+   105			if (searchOpen()) {
+   106				document.addEventListener("click", handleClickOutside);
+   107			} else {
+   108				document.removeEventListener("click", handleClickOutside);
+   109			}
+   110		});
+   111	
+   112		onCleanup(() => {
+   113			document.removeEventListener("click", handleClickOutside);
+   114		});
+   115	
+   116		const handleSearchKeyDown = (e: KeyboardEvent) => {
+   117			const items = filteredApps();
+   118			if (e.key === "ArrowDown") {
+   119				e.preventDefault();
+   120				setSearchOpen(true);
+   121				if (items.length === 0) return;
+   122				setHighlightedIndex((i) => Math.min(items.length - 1, i + 1));
+   123			} else if (e.key === "ArrowUp") {
+   124				e.preventDefault();
+   125				if (items.length === 0) return;
+   126				setHighlightedIndex((i) => Math.max(0, i - 1));
+   127			} else if (e.key === "Enter") {
+   128				if (!searchOpen() || items.length === 0) return;
+   129				e.preventDefault();
+   130				const idx = Math.min(highlightedIndex(), items.length - 1);
+   131				const target = items[idx];
+   132				if (target) handleAddApp(target);
+   133			} else if (e.key === "Escape") {
+   134				if (!searchOpen()) return;
+   135				e.preventDefault();
+   136				setSearchOpen(false);
+   137			}
+   138		};
+   139	
+   140		const handleAddApp = (app: InstalledApp) => {
+   141			setPendingApps((prev) => [
+   142				...prev,
+   143				{ bundle_id: app.bundle_id, app_name: app.name, words: [] },
+   144			]);
+   145			setExpanded((prev) => {
+   146				const next = new Set(prev);
+   147				next.add(app.bundle_id);
+   148				return next;
+   149			});
+   150			setSearchQuery("");
+   151			setSearchOpen(false);
+   152			capture("app_dictionary_app_added");
+   153		};
+   154	
+   155		const toggleExpanded = (bundleId: string) => {
+   156			setExpanded((prev) => {
+   157				const next = new Set(prev);
+   158				if (next.has(bundleId)) next.delete(bundleId);
+   159				else next.add(bundleId);
+   160				return next;
+   161			});
+   162		};
+   163	
+   164		const handleAddAppWord = async (group: AppDictionary) => {
+   165			const word = (newWordByApp()[group.bundle_id] ?? "").trim();
+   166			if (!word) return;
+   167			if (addingApp().has(group.bundle_id)) return;
+   168	
+   169			setAddingApp((prev) => {
+   170				const next = new Set(prev);
+   171				next.add(group.bundle_id);
+   172				return next;
+   173			});
+   174			const result = await addAppDictionaryWord(group.bundle_id, group.app_name, word);
+   175			if (Result.isOk(result)) {
+   176				capture("app_dictionary_word_added");
+   177				setNewWordByApp((prev) => ({ ...prev, [group.bundle_id]: "" }));
+   178				setPendingApps((prev) => prev.filter((p) => p.bundle_id !== group.bundle_id));
+   179				await fetchAppDicts();
+   180			}
+   181			setAddingApp((prev) => {
+   182				const next = new Set(prev);
+   183				next.delete(group.bundle_id);
+   184				return next;
+   185			});
+   186		};
+   187	
+   188		const handleAppWordKeyDown = (e: KeyboardEvent, group: AppDictionary) => {
+   189			if (e.key === "Enter") handleAddAppWord(group);
+   190		};
+   191	
+   192		const startEditAppWord = (wordId: string, word: string) => {
+   193			setEditingAppWordId(wordId);
+   194			setEditingAppWord(word);
+   195		};
+   196	
+   197		const cancelEditAppWord = () => {
+   198			setEditingAppWordId(null);
+   199			setEditingAppWord("");
+   200		};
+   201	
+   202		const handleEditAppWord = async (group: AppDictionary, wordId: string) => {
+   203			const word = editingAppWord().trim();
+   204			if (!word) return;
+   205			capture("app_dictionary_word_edited");
+   206			setAppDicts(
+   207				appDicts().map((g) =>
+   208					g.bundle_id === group.bundle_id
+   209						? { ...g, words: g.words.map((w) => (w.id === wordId ? { ...w, word } : w)) }
+   210						: g
+   211				)
+   212			);
+   213			setEditingAppWordId(null);
+   214			setEditingAppWord("");
+   215			const result = await updateAppDictionaryWord(wordId, word);
+   216			if (Result.isError(result)) await fetchAppDicts();
+   217		};
+   218	
+   219		const handleEditAppWordKeyDown = (e: KeyboardEvent, group: AppDictionary, wordId: string) => {
+   220			if (e.key === "Enter") handleEditAppWord(group, wordId);
+   221			else if (e.key === "Escape") cancelEditAppWord();
+   222		};
+   223	
+   224		const handleDeleteAppWord = async (group: AppDictionary, wordId: string) => {
+   225			capture("app_dictionary_word_deleted");
+   226			setAppDicts(
+   227				appDicts().map((g) =>
+   228					g.bundle_id === group.bundle_id
+   229						? { ...g, words: g.words.filter((w) => w.id !== wordId) }
+   230						: g
+   231				)
+   232			);
+   233			const result = await deleteAppDictionaryWord(wordId);
+   234			if (Result.isError(result)) await fetchAppDicts();
+   235		};
+   236	
+   237		const handleRemoveApp = async (group: AppDictionary) => {
+   238			capture("app_dictionary_app_removed");
+   239			setPendingApps((prev) => prev.filter((p) => p.bundle_id !== group.bundle_id));
+   240			setAppDicts((prev) => prev.filter((g) => g.bundle_id !== group.bundle_id));
+   241			setExpanded((prev) => {
+   242				const next = new Set(prev);
+   243				next.delete(group.bundle_id);
+   244				return next;
+   245			});
+   246			if (group.words.length > 0) {
+   247				const result = await deleteAppDictionary(group.bundle_id);
+   248				if (Result.isError(result)) await fetchAppDicts();
+   249			}
+   250		};
+   251	
+   252		return (
+   253			<div>
+   254				<div class="mb-4 flex items-center justify-between">
+   255					<p class="text-txt-muted font-mono text-xs">{t("dictionary.perAppDescription")}</p>
+   256					<Show when={allAppGroups().length > 0}>
+   257						<span class="text-txt-muted font-mono text-xs uppercase">
+   258							{t("appInstructions.appCount").replace("{count}", String(allAppGroups().length))}
+   259						</span>
+   260					</Show>
+   261				</div>
+   262	
+   263				<div ref={searchContainerRef} class="relative mb-6">
+   264					<div class="bg-th-surface border border-border p-4">
+   265						<div class="flex items-center gap-3">
+   266							<Search class="w-4 h-4 text-txt-muted shrink-0" />
+   267							<input
+   268								type="text"
+   269								value={searchQuery()}
+   270								onInput={(e) => {
+   271									setSearchQuery(e.currentTarget.value);
+   272									setSearchOpen(true);
+   273								}}
+   274								onFocus={() => setSearchOpen(true)}
+   275								onKeyDown={handleSearchKeyDown}
+   276								placeholder={t("appInstructions.searchPlaceholder")}
+   277								class="flex-1 bg-transparent text-txt-primary font-mono placeholder-txt-muted focus:outline-none"
+   278							/>
+   279						</div>
+   280					</div>
+   281	
+   282					<Show when={searchOpen()}>
+   283						<div class="absolute z-50 w-full mt-1 bg-th-surface border border-border-strong max-h-72 overflow-auto">
+   284							<Show
+   285								when={!appsLoading()}
+   286								fallback={<For each={SKELETON_ROWS}>{() => <AppRowSkeleton />}</For>}
+   287							>
+   288								<Show
+   289									when={filteredApps().length > 0}
+   290									fallback={
+   291										<div class="px-4 py-3 font-mono text-xs text-txt-muted uppercase tracking-wide">
+   292											{installedApps().length === 0
+   293												? t("appInstructions.noAppsDetected")
+   294												: t("appInstructions.noMatches")}
+   295										</div>
+   296									}
+   297								>
+   298									<For each={filteredApps()}>
+   299										{(app, index) => (
+   300											<button
+   301												type="button"
+   302												ref={(el) => optionRefs.set(index(), el)}
+   303												onClick={() => handleAddApp(app)}
+   304												onMouseEnter={() => setHighlightedIndex(index())}
+   305												class={`w-full px-4 py-2.5 text-left transition-colors font-mono text-sm flex items-center gap-3 ${
+   306													highlightedIndex() === index() ? "bg-th-hover" : ""
+   307												}`}
+   308											>
+   309												<AppIcon src={app.icon_data_url} alt={app.name} />
+   310												<div class="flex flex-col gap-0.5 min-w-0 flex-1">
+   311													<span class="text-txt-primary truncate">{app.name}</span>
+   312													<span class="text-txt-muted text-xs truncate">{app.bundle_id}</span>
+   313												</div>
+   314											</button>
+   315										)}
+   316									</For>
+   317								</Show>
+   318							</Show>
+   319						</div>
+   320					</Show>
+   321				</div>
+   322	
+   323				<Show when={appsLoading()}>
+   324					<div class="space-y-1">
+   325						<For each={SKELETON_ROWS}>{() => <AppRowSkeleton bordered />}</For>
+   326					</div>
+   327				</Show>
+   328	
+   329				<Show when={!appsLoading() && allAppGroups().length === 0}>
+   330					<div class="bg-th-surface border border-border p-12 flex flex-col items-center justify-center text-center">
+   331						<div class="font-mono text-txt-muted text-sm mb-4">
+   332							<span class="text-ac">[INFO]</span> NO_APPS_CONFIGURED
+   333						</div>
+   334						<p class="text-txt-secondary font-mono text-xs uppercase tracking-wide">
+   335							{t("dictionary.perAppEmptyState")}
+   336						</p>
+   337						<p class="text-txt-muted font-mono text-xs mt-2 max-w-sm">
+   338							{t("dictionary.perAppEmptyStateDescription")}
+   339						</p>
+   340					</div>
+   341				</Show>
+   342	
+   343				<Show when={!appsLoading() && allAppGroups().length > 0}>
+   344					<div class="space-y-1">
+   345						<For each={allAppGroups()}>
+   346							{(group) => {
+   347								const isOpen = () => expanded().has(group.bundle_id);
+   348								const wordValue = () => newWordByApp()[group.bundle_id] ?? "";
+   349								const isAdding = () => addingApp().has(group.bundle_id);
+   350								return (
+   351									<div class="bg-th-surface border border-border group hover:border-border-strong transition-colors">
+   352										<div class="flex items-stretch">
+   353											<button
+   354												type="button"
+   355												onClick={() => toggleExpanded(group.bundle_id)}
+   356												class="flex-1 px-4 py-3 flex items-center gap-3 text-left min-w-0"
+   357												title={isOpen() ? t("dictionary.collapse") : t("dictionary.expand")}
+   358											>
+   359												<AppIcon
+   360													src={iconByBundleId().get(group.bundle_id) ?? null}
+   361													alt={group.app_name}
+   362												/>
+   363												<div class="flex flex-col min-w-0 flex-1">
+   364													<span class="text-txt-primary font-mono truncate">{group.app_name}</span>
+   365													<span class="text-txt-muted font-mono text-xs truncate">
+   366														{group.bundle_id}
+   367													</span>
+   368												</div>
+   369												<span class="text-txt-muted font-mono text-xs uppercase tracking-wider shrink-0">
+   370													{t("dictionary.wordCount").replace("{count}", String(group.words.length))}
+   371												</span>
+   372												<ChevronDown
+   373													class={`w-4 h-4 text-txt-muted shrink-0 transition-transform ${
+   374														isOpen() ? "rotate-180" : ""
+   375													}`}
+   376												/>
+   377											</button>
+   378											<button
+   379												type="button"
+   380												onClick={() => handleRemoveApp(group)}
+   381												class="px-3 flex items-center text-txt-muted hover:text-ac opacity-0 group-hover:opacity-100 transition-all font-mono text-xs uppercase tracking-wider shrink-0"
+   382												title={t("appInstructions.delete")}
+   383											>
+   384												[DEL]
+   385											</button>
+   386										</div>
+   387										<Show when={isOpen()}>
+   388											<div class="border-t border-border px-4 py-3 space-y-2">
+   389												<div class="flex gap-2">
+   390													<input
+   391														type="text"
+   392														value={wordValue()}
+   393														onInput={(e) =>
+   394															setNewWordByApp((prev) => ({
+   395																...prev,
+   396																[group.bundle_id]: e.currentTarget.value,
+   397															}))
+   398														}
+   399														onKeyDown={(e) => handleAppWordKeyDown(e, group)}
+   400														placeholder={t("dictionary.wordPlaceholder")}
+   401														class="flex-1 px-3 py-1.5 bg-th-input border border-border-strong text-txt-primary font-mono text-sm placeholder-txt-muted focus:outline-none focus:border-ac transition-colors"
+   402													/>
+   403													<button
+   404														type="button"
+   405														onClick={() => handleAddAppWord(group)}
+   406														disabled={!wordValue().trim() || isAdding()}
+   407														class="flex items-center gap-1 px-3 py-1.5 bg-ac text-ac-on font-mono uppercase tracking-wider text-xs hover:bg-ac-hover disabled:opacity-50 transition-colors"
+   408													>
+   409														<span>+</span>
+   410														{t("dictionary.addWord")}
+   411													</button>
+   412												</div>
+   413	
+   414												<Show when={group.words.length > 0}>
+   415													<div class="space-y-1 pt-1">
+   416														<For each={group.words}>
+   417															{(word) => (
+   418																<div class="px-3 py-2 bg-th-input border border-border flex items-center justify-between gap-2 group/word">
+   419																	<Show
+   420																		when={editingAppWordId() === word.id}
+   421																		fallback={
+   422																			<span class="text-txt-primary font-mono text-sm flex-1 min-w-0 truncate">
+   423																				{word.word}
+   424																			</span>
+   425																		}
+   426																	>
+   427																		<input
+   428																			type="text"
+   429																			value={editingAppWord()}
+   430																			onInput={(e) => setEditingAppWord(e.currentTarget.value)}
+   431																			onKeyDown={(e) => handleEditAppWordKeyDown(e, group, word.id)}
+   432																			class="flex-1 px-2 py-1 bg-th-base border border-border-strong text-txt-primary font-mono text-sm focus:outline-none focus:border-ac transition-colors"
+   433																			autofocus
+   434																		/>
+   435																	</Show>
+   436																	<div class="flex items-center gap-2 font-mono text-xs shrink-0">
+   437																		<Show
+   438																			when={editingAppWordId() === word.id}
+   439																			fallback={
+   440																				<>
+   441																					<button
+   442																						type="button"
+   443																						onClick={() => startEditAppWord(word.id, word.word)}
+   444																						class="text-txt-muted hover:text-ac opacity-0 group-hover/word:opacity-100 transition-all uppercase tracking-wider"
+   445																						title={t("dictionary.edit")}
+   446																					>
+   447																						[EDIT]
+   448																					</button>
+   449																					<button
+   450																						type="button"
+   451																						onClick={() => handleDeleteAppWord(group, word.id)}
+   452																						class="text-txt-muted hover:text-ac opacity-0 group-hover/word:opacity-100 transition-all uppercase tracking-wider"
+   453																						title={t("dictionary.delete")}
+   454																					>
+   455																						[DEL]
+   456																					</button>
+   457																				</>
+   458																			}
+   459																		>
+   460																			<button
+   461																				type="button"
+   462																				onClick={() => handleEditAppWord(group, word.id)}
+   463																				class="text-success hover:opacity-80 uppercase tracking-wider"
+   464																				title={t("dictionary.save")}
+   465																			>
+   466																				[SAVE]
+   467																			</button>
+   468																			<button
+   469																				type="button"
+   470																				onClick={cancelEditAppWord}
+   471																				class="text-txt-muted hover:text-txt-secondary uppercase tracking-wider"
+   472																				title={t("dictionary.cancel")}
+   473																			>
+   474																				[CANCEL]
+   475																			</button>
+   476																		</Show>
+   477																	</div>
+   478																</div>
+   479															)}
+   480														</For>
+   481													</div>
+   482												</Show>
+   483											</div>
+   484										</Show>
+   485									</div>
+   486								);
+   487							}}
+   488						</For>
+   489					</div>
+   490				</Show>
+   491			</div>
+   492		);
+   493	}
+   494	
+   495	interface AppRowSkeletonProps {
+   496		bordered?: boolean;
+   497	}
+   498	
+   499	function AppRowSkeleton(props: AppRowSkeletonProps) {
+   500		return (
+   501			<div
+   502				class={`px-4 py-2.5 flex items-center gap-3 animate-pulse ${
+   503					props.bordered ? "bg-th-surface border border-border" : ""
+   504				}`}
+   505			>
+   506				<div class="w-8 h-8 shrink-0 bg-th-input" />
+   507				<div class="flex flex-col gap-1.5 min-w-0 flex-1">
+   508					<div class="h-3 w-32 bg-th-input" />
+   509					<div class="h-2.5 w-48 bg-th-input opacity-60" />
+   510				</div>
+   511				<Show when={props.bordered}>
+   512					<div class="w-20 h-4 bg-th-input shrink-0" />
+   513				</Show>
+   514			</div>
+   515		);
+   516	}
+   517	
+   518	interface AppIconProps {
+   519		src: string | null;
+   520		alt: string;
+   521	}
+   522	
+   523	function AppIcon(props: AppIconProps) {
+   524		return (
+   525			<Show
+   526				when={props.src}
+   527				fallback={
+   528					<div class="w-8 h-8 shrink-0 bg-th-input border border-border flex items-center justify-center text-txt-muted font-mono text-xs">
+   529						{props.alt.charAt(0).toUpperCase()}
+   530					</div>
+   531				}
+   532			>
+   533				{(src) => <img src={src()} alt={props.alt} class="w-8 h-8 shrink-0" draggable={false} />}
+   534			</Show>
+   535		);
+   536	}
+===== pages/DictionarySites.tsx =====
+     1	import { Result } from "better-result";
+     2	import { ChevronDown } from "lucide-solid";
+     3	import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+     4	import AddSiteForm from "../components/AddSiteForm";
+     5	import SiteIcon from "../components/SiteIcon";
+     6	import { useI18n } from "../i18n";
+     7	import {
+     8		type SiteDictionary,
+     9		addSiteDictionaryWord,
+    10		deleteSiteDictionary,
+    11		deleteSiteDictionaryWord,
+    12		listSiteDictionaries,
+    13		updateSiteDictionaryWord,
+    14	} from "../lib/commands/dictionary";
+    15	import { preloadFavicons } from "../lib/favicons";
+    16	import { capture } from "../lib/posthog";
+    17	
+    18	export default function DictionarySites() {
+    19		const [t] = useI18n();
+    20		const [siteDicts, setSiteDicts] = createSignal<SiteDictionary[]>([]);
+    21		const [pendingSites, setPendingSites] = createSignal<SiteDictionary[]>([]);
+    22		const [loading, setLoading] = createSignal(true);
+    23	
+    24		const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+    25		const [newWordBySite, setNewWordBySite] = createSignal<Record<string, string>>({});
+    26		const [addingSite, setAddingSite] = createSignal<Set<string>>(new Set());
+    27		const [editingWordId, setEditingWordId] = createSignal<string | null>(null);
+    28		const [editingWord, setEditingWord] = createSignal("");
+    29	
+    30		const fetchSiteDicts = async () => {
+    31			const result = await listSiteDictionaries();
+    32			if (Result.isOk(result)) {
+    33				setSiteDicts(result.value);
+    34				preloadFavicons(result.value.map((g) => g.domain));
+    35			}
+    36		};
+    37	
+    38		onMount(async () => {
+    39			capture("$pageview", { $current_url: "/dictionary/sites" });
+    40			setLoading(true);
+    41			await fetchSiteDicts();
+    42			setLoading(false);
+    43		});
+    44	
+    45		const allSiteGroups = createMemo(() => {
+    46			const persisted = siteDicts();
+    47			const persistedDomains = new Set(persisted.map((d) => d.domain));
+    48			const pending = pendingSites().filter((p) => !persistedDomains.has(p.domain));
+    49			return [...persisted, ...pending];
+    50		});
+    51	
+    52		const configuredDomains = createMemo(() => new Set(allSiteGroups().map((g) => g.domain)));
+    53	
+    54		const addSite = (domain: string) => {
+    55			if (configuredDomains().has(domain)) {
+    56				setExpanded((prev) => {
+    57					const next = new Set(prev);
+    58					next.add(domain);
+    59					return next;
+    60				});
+    61				return;
+    62			}
+    63			setPendingSites((prev) => [...prev, { domain, words: [] }]);
+    64			setExpanded((prev) => {
+    65				const next = new Set(prev);
+    66				next.add(domain);
+    67				return next;
+    68			});
+    69			capture("site_dictionary_site_added");
+    70		};
+    71	
+    72		const toggleExpanded = (domain: string) => {
+    73			setExpanded((prev) => {
+    74				const next = new Set(prev);
+    75				if (next.has(domain)) next.delete(domain);
+    76				else next.add(domain);
+    77				return next;
+    78			});
+    79		};
+    80	
+    81		const handleAddWord = async (group: SiteDictionary) => {
+    82			const word = (newWordBySite()[group.domain] ?? "").trim();
+    83			if (!word) return;
+    84			if (addingSite().has(group.domain)) return;
+    85	
+    86			setAddingSite((prev) => {
+    87				const next = new Set(prev);
+    88				next.add(group.domain);
+    89				return next;
+    90			});
+    91			const result = await addSiteDictionaryWord(group.domain, word);
+    92			if (Result.isOk(result)) {
+    93				capture("site_dictionary_word_added");
+    94				setNewWordBySite((prev) => ({ ...prev, [group.domain]: "" }));
+    95				setPendingSites((prev) => prev.filter((p) => p.domain !== group.domain));
+    96				await fetchSiteDicts();
+    97			}
+    98			setAddingSite((prev) => {
+    99				const next = new Set(prev);
+   100				next.delete(group.domain);
+   101				return next;
+   102			});
+   103		};
+   104	
+   105		const handleWordKeyDown = (e: KeyboardEvent, group: SiteDictionary) => {
+   106			if (e.key === "Enter") handleAddWord(group);
+   107		};
+   108	
+   109		const startEditWord = (wordId: string, word: string) => {
+   110			setEditingWordId(wordId);
+   111			setEditingWord(word);
+   112		};
+   113	
+   114		const cancelEditWord = () => {
+   115			setEditingWordId(null);
+   116			setEditingWord("");
+   117		};
+   118	
+   119		const handleEditWord = async (group: SiteDictionary, wordId: string) => {
+   120			const word = editingWord().trim();
+   121			if (!word) return;
+   122			capture("site_dictionary_word_edited");
+   123			setSiteDicts(
+   124				siteDicts().map((g) =>
+   125					g.domain === group.domain
+   126						? { ...g, words: g.words.map((w) => (w.id === wordId ? { ...w, word } : w)) }
+   127						: g
+   128				)
+   129			);
+   130			setEditingWordId(null);
+   131			setEditingWord("");
+   132			const result = await updateSiteDictionaryWord(wordId, word);
+   133			if (Result.isError(result)) await fetchSiteDicts();
+   134		};
+   135	
+   136		const handleEditWordKeyDown = (e: KeyboardEvent, group: SiteDictionary, wordId: string) => {
+   137			if (e.key === "Enter") handleEditWord(group, wordId);
+   138			else if (e.key === "Escape") cancelEditWord();
+   139		};
+   140	
+   141		const handleDeleteWord = async (group: SiteDictionary, wordId: string) => {
+   142			capture("site_dictionary_word_deleted");
+   143			setSiteDicts(
+   144				siteDicts().map((g) =>
+   145					g.domain === group.domain ? { ...g, words: g.words.filter((w) => w.id !== wordId) } : g
+   146				)
+   147			);
+   148			const result = await deleteSiteDictionaryWord(wordId);
+   149			if (Result.isError(result)) await fetchSiteDicts();
+   150		};
+   151	
+   152		const handleRemoveSite = async (group: SiteDictionary) => {
+   153			capture("site_dictionary_site_removed");
+   154			setPendingSites((prev) => prev.filter((p) => p.domain !== group.domain));
+   155			setSiteDicts((prev) => prev.filter((g) => g.domain !== group.domain));
+   156			setExpanded((prev) => {
+   157				const next = new Set(prev);
+   158				next.delete(group.domain);
+   159				return next;
+   160			});
+   161			if (group.words.length > 0) {
+   162				const result = await deleteSiteDictionary(group.domain);
+   163				if (Result.isError(result)) await fetchSiteDicts();
+   164			}
+   165		};
+   166	
+   167		return (
+   168			<div>
+   169				<div class="mb-4 flex items-center justify-between">
+   170					<p class="text-txt-muted font-mono text-xs">{t("dictionary.sitesDescription")}</p>
+   171					<Show when={allSiteGroups().length > 0}>
+   172						<span class="text-txt-muted font-mono text-xs uppercase">
+   173							{t("dictionary.siteCount").replace("{count}", String(allSiteGroups().length))}
+   174						</span>
+   175					</Show>
+   176				</div>
+   177	
+   178				<AddSiteForm onAdd={addSite} />
+   179	
+   180				<Show when={!loading() && allSiteGroups().length === 0}>
+   181					<div class="bg-th-surface border border-border p-12 flex flex-col items-center justify-center text-center">
+   182						<div class="font-mono text-txt-muted text-sm mb-4">
+   183							<span class="text-ac">[INFO]</span> NO_SITES_CONFIGURED
+   184						</div>
+   185						<p class="text-txt-secondary font-mono text-xs uppercase tracking-wide">
+   186							{t("dictionary.sitesEmptyState")}
+   187						</p>
+   188						<p class="text-txt-muted font-mono text-xs mt-2 max-w-sm">
+   189							{t("dictionary.sitesEmptyStateDescription")}
+   190						</p>
+   191					</div>
+   192				</Show>
+   193	
+   194				<Show when={!loading() && allSiteGroups().length > 0}>
+   195					<div class="space-y-1">
+   196						<For each={allSiteGroups()}>
+   197							{(group) => {
+   198								const isOpen = () => expanded().has(group.domain);
+   199								const wordValue = () => newWordBySite()[group.domain] ?? "";
+   200								const isAdding = () => addingSite().has(group.domain);
+   201								return (
+   202									<div class="bg-th-surface border border-border group hover:border-border-strong transition-colors">
+   203										<div class="flex items-stretch">
+   204											<button
+   205												type="button"
+   206												onClick={() => toggleExpanded(group.domain)}
+   207												class="flex-1 px-4 py-3 flex items-center gap-3 text-left min-w-0"
+   208												title={isOpen() ? t("dictionary.collapse") : t("dictionary.expand")}
+   209											>
+   210												<SiteIcon domain={group.domain} sizeClass="w-8 h-8" />
+   211												<div class="flex flex-col min-w-0 flex-1">
+   212													<span class="text-txt-primary font-mono truncate">{group.domain}</span>
+   213												</div>
+   214												<span class="text-txt-muted font-mono text-xs uppercase tracking-wider shrink-0">
+   215													{t("dictionary.wordCount").replace("{count}", String(group.words.length))}
+   216												</span>
+   217												<ChevronDown
+   218													class={`w-4 h-4 text-txt-muted shrink-0 transition-transform ${
+   219														isOpen() ? "rotate-180" : ""
+   220													}`}
+   221												/>
+   222											</button>
+   223											<button
+   224												type="button"
+   225												onClick={() => handleRemoveSite(group)}
+   226												class="px-3 flex items-center text-txt-muted hover:text-ac opacity-0 group-hover:opacity-100 transition-all font-mono text-xs uppercase tracking-wider shrink-0"
+   227												title={t("appInstructions.delete")}
+   228											>
+   229												[DEL]
+   230											</button>
+   231										</div>
+   232										<Show when={isOpen()}>
+   233											<div class="border-t border-border px-4 py-3 space-y-2">
+   234												<div class="flex gap-2">
+   235													<input
+   236														type="text"
+   237														value={wordValue()}
+   238														onInput={(e) =>
+   239															setNewWordBySite((prev) => ({
+   240																...prev,
+   241																[group.domain]: e.currentTarget.value,
+   242															}))
+   243														}
+   244														onKeyDown={(e) => handleWordKeyDown(e, group)}
+   245														placeholder={t("dictionary.wordPlaceholder")}
+   246														class="flex-1 px-3 py-1.5 bg-th-input border border-border-strong text-txt-primary font-mono text-sm placeholder-txt-muted focus:outline-none focus:border-ac transition-colors"
+   247													/>
+   248													<button
+   249														type="button"
+   250														onClick={() => handleAddWord(group)}
+   251														disabled={!wordValue().trim() || isAdding()}
+   252														class="flex items-center gap-1 px-3 py-1.5 bg-ac text-ac-on font-mono uppercase tracking-wider text-xs hover:bg-ac-hover disabled:opacity-50 transition-colors"
+   253													>
+   254														<span>+</span>
+   255														{t("dictionary.addWord")}
+   256													</button>
+   257												</div>
+   258	
+   259												<Show when={group.words.length > 0}>
+   260													<div class="space-y-1 pt-1">
+   261														<For each={group.words}>
+   262															{(word) => (
+   263																<div class="px-3 py-2 bg-th-input border border-border flex items-center justify-between gap-2 group/word">
+   264																	<Show
+   265																		when={editingWordId() === word.id}
+   266																		fallback={
+   267																			<span class="text-txt-primary font-mono text-sm flex-1 min-w-0 truncate">
+   268																				{word.word}
+   269																			</span>
+   270																		}
+   271																	>
+   272																		<input
+   273																			type="text"
+   274																			value={editingWord()}
+   275																			onInput={(e) => setEditingWord(e.currentTarget.value)}
+   276																			onKeyDown={(e) => handleEditWordKeyDown(e, group, word.id)}
+   277																			class="flex-1 px-2 py-1 bg-th-base border border-border-strong text-txt-primary font-mono text-sm focus:outline-none focus:border-ac transition-colors"
+   278																			autofocus
+   279																		/>
+   280																	</Show>
+   281																	<div class="flex items-center gap-2 font-mono text-xs shrink-0">
+   282																		<Show
+   283																			when={editingWordId() === word.id}
+   284																			fallback={
+   285																				<>
+   286																					<button
+   287																						type="button"
+   288																						onClick={() => startEditWord(word.id, word.word)}
+   289																						class="text-txt-muted hover:text-ac opacity-0 group-hover/word:opacity-100 transition-all uppercase tracking-wider"
+   290																						title={t("dictionary.edit")}
+   291																					>
+   292																						[EDIT]
+   293																					</button>
+   294																					<button
+   295																						type="button"
+   296																						onClick={() => handleDeleteWord(group, word.id)}
+   297																						class="text-txt-muted hover:text-ac opacity-0 group-hover/word:opacity-100 transition-all uppercase tracking-wider"
+   298																						title={t("dictionary.delete")}
+   299																					>
+   300																						[DEL]
+   301																					</button>
+   302																				</>
+   303																			}
+   304																		>
+   305																			<button
+   306																				type="button"
+   307																				onClick={() => handleEditWord(group, word.id)}
+   308																				class="text-success hover:opacity-80 uppercase tracking-wider"
+   309																				title={t("dictionary.save")}
+   310																			>
+   311																				[SAVE]
+   312																			</button>
+   313																			<button
+   314																				type="button"
+   315																				onClick={cancelEditWord}
+   316																				class="text-txt-muted hover:text-txt-secondary uppercase tracking-wider"
+   317																				title={t("dictionary.cancel")}
+   318																			>
+   319																				[CANCEL]
+   320																			</button>
+   321																		</Show>
+   322																	</div>
+   323																</div>
+   324															)}
+   325														</For>
+   326													</div>
+   327												</Show>
+   328											</div>
+   329										</Show>
+   330									</div>
+   331								);
+   332							}}
+   333						</For>
+   334					</div>
+   335				</Show>
+   336			</div>
+   337		);
+   338	}
