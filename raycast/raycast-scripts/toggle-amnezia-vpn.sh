@@ -41,10 +41,10 @@ tell application "System Events"
 
 		if enabled of disconnectItem then
 			click disconnectItem
-			return "VPN off"
+			return "Amnezia off"
 		else if enabled of connectItem then
 			click connectItem
-			return "VPN on"
+			return "Amnezia on"
 		else
 			return "Amnezia is busy - try again in a moment"
 		end if
