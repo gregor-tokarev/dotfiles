@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "plugins": {
+    "frontend-design@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
+        "version": "unknown",
+        "installedAt": "2026-07-01T04:06:27.720Z",
+        "lastUpdated": "2026-07-02T04:04:57.071Z",
+        "gitCommitSha": "317b8988055b151b694d4e06e5039b3f38dbe425"
+      }
+    ],
+    "typescript-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/typescript-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-07-01T04:06:27.720Z",
+        "lastUpdated": "2026-07-01T04:06:27.720Z",
+        "gitCommitSha": "317b8988055b151b694d4e06e5039b3f38dbe425"
+      }
+    ],
+    "rust-analyzer-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/rust-analyzer-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-07-01T04:06:27.720Z",
+        "lastUpdated": "2026-07-01T04:06:27.720Z",
+        "gitCommitSha": "317b8988055b151b694d4e06e5039b3f38dbe425"
+      }
+    ],
+    "gopls-lsp@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/gopls-lsp/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-07-01T04:06:27.720Z",
+        "lastUpdated": "2026-07-01T04:06:27.720Z",
+        "gitCommitSha": "317b8988055b151b694d4e06e5039b3f38dbe425"
+      }
+    ]
+  }
+}
