@@ -40,6 +40,7 @@
         ]
       },
       "default_config_options": {
+        "effort": "max",
         "model": "opencode-go/glm-5.2"
       },
       "type": "registry"
@@ -80,10 +81,9 @@
       "model": "go/deepseek-v4-flash"
     },
     "default_model": {
-      "effort": "xhigh",
-      "enable_thinking": true,
-      "provider": "openai-subscribed",
-      "model": "gpt-5.5"
+      "enable_thinking": false,
+      "provider": "opencode",
+      "model": "go/glm-5.2"
     },
     "button": true,
     "enable_feedback": false,
@@ -123,6 +123,6 @@
   "theme": {
     "mode": "system",
     "light": "One Light",
-    "dark": "GitHub Dark"
+    "dark": "Catppuccin Macchiato"
   },
 }

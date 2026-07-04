@@ -1,0 +1,18 @@
+// Zed global tasks
+// Referenced by keymap.json via task::Spawn with task_name.
+[
+  {
+    "label": "open_lazygit",
+    "command": "lazygit",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "open_lazydocker",
+    "command": "lazydocker",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]
