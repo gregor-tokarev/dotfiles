@@ -1,0 +1,108 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion|ask_user_question|request_user_input|ExitPlanMode|exit_plan_mode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${SUPERCONDUCTOR_MANAGED_AGENT:-0}\" = \"1\" ] || exit 0; [ -n \"${SUPERCONDUCTOR_TERMINAL_ID:-}${SUPERCONDUCTOR_WORKTREE_PATH:-}${GROK_WORKSPACE_ROOT:-}\" ] || exit 0; exec \"/Users/egortokarev/.superconductor/hooks/notify.sh\" >/dev/null 2>&1"
+          }
+        ]
+      }
+    ]
+  }
+}

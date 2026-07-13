@@ -1,0 +1,30 @@
+[hints]
+project_picker_disabled = true
+
+[cli]
+installer = "npm"
+auto_update = true
+
+[models]
+default = "grok-build"
+
+[ui]
+max_thoughts_width = 120
+fork_secondary_model = "grok-build"
+yolo = false
+compact_mode = false
+permission_mode = "always-approve"
+vim_mode = true
+
+[marketplace]
+official_marketplace_auto_installed = true
+
+  [[marketplace.sources]]
+  name = "xAI Official"
+  git = "https://github.com/xai-org/plugin-marketplace.git"
+
+[telemetry]
+trace_uploads = false
+
+[harness]
+disable_codebase_upload = true

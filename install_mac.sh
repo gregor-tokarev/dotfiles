@@ -96,6 +96,7 @@ stow nvim
 stow zsh
 stow claude
 stow agents
+stow grok
 stow git
 stow ghostty
 stow kitty
