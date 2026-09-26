@@ -15,8 +15,8 @@
       }
     }
   },
-  "model": "opencode-go/glm-5.2",
-  "small_model": "opencode-go/glm-5.2",
+  "model": "opencode-go/glm-5.3-flash",
+  "small_model": "opencode-go/glm-5.3",
   "plugin": [],
   "mcp": {
     "open-computer-use": {

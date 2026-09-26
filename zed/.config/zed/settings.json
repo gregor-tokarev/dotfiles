@@ -30,6 +30,9 @@
   "base_keymap": "Cursor",
   "show_edit_predictions": true,
   "agent_servers": {
+    "grok-build": {
+      "type": "registry"
+    },
     "cursor": {
       "type": "registry"
     },
@@ -48,13 +51,18 @@
     "codex-acp": {
       "type": "registry",
       "default_config_options": {
-        "reasoning_effort": "low"
+        "model": "gpt-6-astra",
+        "collaboration_mode": "default",
+        "mode": "agent-full-access",
+        "reasoning_effort": "high"
       }
     },
     "claude-acp": {
       "default_config_options": {
+        "fast": "off",
+        "effort": "high",
         "model": "claude-fable-5[1m]",
-        "mode": "bypassPermissions"
+        "mode": "plan"
       },
       "type": "registry",
       "default_mode": "bypassPermissions",
@@ -64,6 +72,7 @@
   "auto_install_extensions": {
     "html": true,
     "material-icon-theme": true,
+    "swift": true,
   },
   "icon_theme": {
     "mode": "light",
@@ -121,8 +130,8 @@
   "ui_font_size": 16,
   "buffer_font_size": 15,
   "theme": {
-    "mode": "system",
+    "mode": "dark",
     "light": "One Light",
-    "dark": "Catppuccin Macchiato"
+    "dark": "One Dark Pro"
   },
 }

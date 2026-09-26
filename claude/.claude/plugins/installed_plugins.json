@@ -4,11 +4,11 @@
     "frontend-design@claude-plugins-official": [
       {
         "scope": "user",
-        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
-        "version": "unknown",
+        "installPath": "/Users/egortokarev/.claude/plugins/cache/claude-plugins-official/frontend-design/85cce0381e78",
+        "version": "85cce0381e78",
         "installedAt": "2026-07-01T04:06:27.720Z",
-        "lastUpdated": "2026-07-02T04:04:57.071Z",
-        "gitCommitSha": "317b8988055b151b694d4e06e5039b3f38dbe425"
+        "lastUpdated": "2026-09-05T04:31:47.933Z",
+        "gitCommitSha": "85cce0381e7860082641b59d961a2b8c368b8b79"
       }
     ],
     "typescript-lsp@claude-plugins-official": [

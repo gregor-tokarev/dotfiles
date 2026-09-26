@@ -1,0 +1,1 @@
+- [video-use setup](video-use-setup.md) — installed at ~/Developer/video-use; run helpers with the repo's .venv python, never bare `python`.

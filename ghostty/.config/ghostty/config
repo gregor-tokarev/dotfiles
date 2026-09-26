@@ -6,3 +6,5 @@ maximize = true
 focus-follows-mouse = true
 
 keybind = shift+enter=text:\x1b\r
+
+confirm-close-surface = false
