@@ -18,6 +18,7 @@ Use this reference when enrolling a new worker, configuring an existing one, or 
 - curl, jq, rg, rsync, tar, and unzip
 - C/C++ compiler, make, and pkg-config, using the OS equivalents where necessary
 - kache configured globally for Rust and C/C++ build caching
+- Cargo parallelism capped at half the CPU cores (`jobs` under `[build]` in `~/.cargo/config.toml`), so parallel agent builds don't starve SSH (worker only)
 - Cloudflare CLI (`cf`) and Railway CLI
 
 Sign in to supported tools with the intended account, using the cockpit's browser session when appropriate. Report any remaining sign-in blockers.

@@ -7,6 +7,11 @@ Interact with GitHub through the authenticated `gh` cli.
 
 Don't end your turn or ask me for confirmation between rounds. Only stop when done or at a give-up condition.
 
+# Waiting
+Reviews and CI take a long time. Never end your turn to wait for a background job or a notification: if the session restarts or sits idle, the job and the notification are lost and the loop dies.
+- Start long jobs in the background, then wait in the foreground with polling commands that each finish in under 10 minutes. Repeat until the job is done.
+- Wait on something specific: the job's PID (`kill -0 <pid>`), an exit marker in its output file, or `gh pr checks --watch`. Never wait on `pgrep -f <pattern>`: it matches your own wait command, so the loop never ends.
+
 # Setup
 - No PR link given: create one with the file-pr skill, then skip straight to "Review".
 - PR link given: make sure you are in a worktree checked out on the PR branch (`gh pr checkout` in a new worktree if not).
@@ -26,7 +31,7 @@ Don't end your turn or ask me for confirmation between rounds. Only stop when do
    Model: `gpt-6-astra` if the PR has no review-pr status comment (`<!-- review-pr-status -->`) yet, since the first review sees the whole diff. `gpt-6.1-sol` for every re-review after that.
 
    Do not edit the worktree while the review runs.
-4. **Wait for review.** Wait for the codex process to exit. Use a long timeout, xhigh reviews take a while. The run failed if codex errors, times out, or exits while the review-pr status comment (`<!-- review-pr-status -->`) is still 🔄 Running or doesn't show the current head SHA. Retry a failed run.
+4. **Wait for review.** Wait for the codex process to exit (see Waiting). The run failed if codex errors, times out, or exits while the review-pr status comment (`<!-- review-pr-status -->`) is still 🔄 Running or doesn't show the current head SHA. Retry a failed run.
 5. **Check.** Done when the status comment shows ✅ Approved for the current head SHA, CI is green, and no human threads are left unanswered. Otherwise go back to 1.
 
 Stop after 15 rounds, or if codex fails twice in a row, and report to me: PR link, open threads, failing checks, and the codex error if any.
