@@ -62,7 +62,7 @@
         "fast": "off",
         "effort": "high",
         "model": "opus",
-        "mode": "plan"
+        "mode": "bypassPermissions"
       },
       "type": "registry",
       "default_mode": "bypassPermissions",

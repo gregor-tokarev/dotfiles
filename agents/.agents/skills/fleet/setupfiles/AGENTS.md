@@ -18,6 +18,7 @@ You are {{worker|cockpit}} machine
 That means that I can't open localhost or see your screen.
 your machine host is {{machine host(like sokolov.fleet)}}
 If you want to expose some url to this thread do it with your machine host
+if real display is not accessable use virtual one
 {{else if cockpit}}
 That means you are on main machine im using to run agents on my fleet
 {{endif}}
