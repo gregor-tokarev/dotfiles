@@ -1,6 +1,6 @@
 ---
 name: fleet
-description: Access or run work on one or more fleet workers connected through Amnezia VPN, troubleshoot fleet connectivity and .fleet DNS, enroll new workers, or configure existing workers. Machine names: sokolov, corpbook, vds
+description: Access or run work on one or more fleet workers connected through Amnezia VPN, troubleshoot fleet connectivity and .fleet DNS, enroll new workers, configure existing workers, or set up the cockpit. Machine names: sokolov, corpbook, vds
 ---
 
 Cockpit - the control machine from which work is delegated. It has no `.fleet` domain and is not a worker.
@@ -20,6 +20,6 @@ This is the required access policy, not proof of the current firewall configurat
 
 Read [machines.md](machines.md) only when the task needs machine inventory, connection details, or host-specific services.
 
-## Worker configuration
+## Machine configuration
 
-Read [box_setup.md](box_setup.md) when enrolling a new worker or configuring an existing worker. For existing workers, apply only the requested configuration changes unless asked to bring the whole machine into the documented target state.
+Read [box_setup.md](box_setup.md) when enrolling a new worker, configuring an existing worker, or setting up the cockpit. For existing machines, apply only the requested configuration changes unless asked to bring the whole machine into the documented target state.

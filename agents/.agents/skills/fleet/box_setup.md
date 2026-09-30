@@ -1,16 +1,19 @@
-# Worker configuration
+# Machine configuration
 
-Use this reference when enrolling a new worker or configuring an existing one. It describes the worker target state; it does not apply that role to the cockpit.
+Use this reference when enrolling a new worker, configuring an existing one, or setting up the cockpit. It describes the target state.
+
+- Workers: every section applies.
+- Cockpit: Software, Codex sign-in, and Skills and agents apply. Network and access does not, and items marked worker only are skipped. Nothing on the cockpit may be reachable from workers (see the connection policy).
 
 ## Software
 
 - Rust/Cargo, Go, Bun, and Python
-- OpenSSH server, enabled at boot
+- OpenSSH server, enabled at boot (worker only)
 - Codex CLI, authenticated for the intended user
 - Claude Code CLI (`claude`), available in the intended user's terminal and SSH sessions; verify installation and report whether sign-in is still required
 - OpenCode, with its intended provider configured
 - Vite+ with Node.js LTS managed by Vite+
-- T3 Code backend running as a persistent background service
+- T3 Code backend running as a persistent background service (on the cockpit, listening on localhost only)
 - Git with the intended user identity configured; GitHub CLI authenticated for the intended account
 - curl, jq, rg, rsync, tar, and unzip
 - C/C++ compiler, make, and pkg-config, using the OS equivalents where necessary
@@ -23,13 +26,13 @@ Sign in to supported tools with the intended account, using the cockpit's browse
 
 Complete routine Codex sign-in without asking the user to run commands, enter a device code, or approve each step.
 
-1. Check `codex login status` as the worker user. Keep a working sign-in unless the user requests reauthentication.
-2. If needed, run `codex login --device-auth` on the worker and keep it running. Use browser automation on the cockpit to open its verification URL in the intended account's session, enter its device code, and complete sign-in. Reject codes from third-party pages; do not copy the cockpit's authentication cache.
-3. Verify `codex login status` on the worker after it reports success. Browser success alone is insufficient.
+1. Check `codex login status` as the intended user. Keep a working sign-in unless the user requests reauthentication.
+2. If needed, run `codex login --device-auth` on the machine and keep it running. Use browser automation on the cockpit to open its verification URL in the intended account's session, enter its device code, and complete sign-in. Reject codes from third-party pages; do not copy the cockpit's authentication cache.
+3. Verify `codex login status` on the machine after it reports success. Browser success alone is insufficient.
 
 Ask the user only for blockers requiring their participation: unavailable credentials, MFA, an ambiguous account, or mandatory confirmation. Do not bypass security checks, save codes or tokens in notes or final messages, or initiate a worker-to-cockpit connection.
 
-## Network and access
+## Network and access (worker only)
 
 - Give each worker its own Amnezia profile, unique peer identity, and private IP. Do not copy another machine's peer credentials.
 - Start the VPN automatically and provide both outgoing and incoming fleet connectivity.
@@ -48,3 +51,5 @@ files that you should copy over to ~/.agents directory and symbolic link it with
 
 ./skilllisting over to .agents/skills
 setupfiles to ~/.agents in AGENTS.md dynamic segments {{}} are presented, resolve them before setting up on machine
+
+On the cockpit, symlink each skill from ./skilllisting into ~/.agents/skills instead of copying, so dotfiles edits apply immediately.

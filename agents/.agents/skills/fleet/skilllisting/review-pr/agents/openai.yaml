@@ -1,0 +1,5 @@
+interface:
+  display_name: "Review PR"
+  short_description: "Review a GitHub PR"
+policy:
+  allow_implicit_invocation: false
