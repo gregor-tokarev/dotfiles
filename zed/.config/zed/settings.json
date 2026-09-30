@@ -51,7 +51,7 @@
     "codex-acp": {
       "type": "registry",
       "default_config_options": {
-        "model": "gpt-6-astra",
+        "model": "gpt-6-sol",
         "collaboration_mode": "default",
         "mode": "agent-full-access",
         "reasoning_effort": "high"
@@ -61,7 +61,7 @@
       "default_config_options": {
         "fast": "off",
         "effort": "high",
-        "model": "claude-fable-5[1m]",
+        "model": "opus",
         "mode": "plan"
       },
       "type": "registry",

@@ -1,6 +1,6 @@
 ---
 name: fleet
-description: Access or run work on one or more fleet workers connected through Amnezia VPN, troubleshoot fleet connectivity and .fleet DNS, enroll new workers, or configure existing workers.
+description: Access or run work on one or more fleet workers connected through Amnezia VPN, troubleshoot fleet connectivity and .fleet DNS, enroll new workers, or configure existing workers. Machine names: sokolov, corpbook, vds
 ---
 
 Cockpit - the control machine from which work is delegated. It has no `.fleet` domain and is not a worker.

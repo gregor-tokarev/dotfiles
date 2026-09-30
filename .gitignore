@@ -1,2 +1,5 @@
 # machine-generated state
 .agents/.skill-lock.json
+
+# local Claude configuration and runtime data
+/claude/

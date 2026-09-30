@@ -1,2 +1,0 @@
-- [Ozon MITM capture setup](ozon-mitm-capture-setup.md) — rootable emulator + system CA needed to decrypt Ozon HTTPS; exact provisioning steps
-- [Traffic capture RPCs](ozon-traffic-capture-rpcs.md) — StreamTraffic/ListTraffic/CaptureTraffic handlers and the "nothing appears" gotchas

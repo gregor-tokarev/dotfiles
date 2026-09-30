@@ -4,22 +4,30 @@ Use this reference when enrolling a new worker or configuring an existing one. I
 
 ## Software
 
-- Rust and Cargo
+- Rust/Cargo, Go, Bun, and Python
 - OpenSSH server, enabled at boot
 - Codex CLI, authenticated for the intended user
 - Claude Code CLI (`claude`), available in the intended user's terminal and SSH sessions; verify installation and report whether sign-in is still required
 - OpenCode, with its intended provider configured
-- Go
-- Bun
-- Vite+
-- Node.js LTS, managed by Vite+
-- Python
+- Vite+ with Node.js LTS managed by Vite+
 - T3 Code backend running as a persistent background service
-- Git, with the intended user identity configured
-- GitHub CLI, authenticated for the intended account
+- Git with the intended user identity configured; GitHub CLI authenticated for the intended account
 - curl, jq, rg, rsync, tar, and unzip
 - C/C++ compiler, make, and pkg-config, using the OS equivalents where necessary
-- kache, configured globally for Rust and C/C++ build caching.
+- kache configured globally for Rust and C/C++ build caching
+- Cloudflare CLI (`cf`) and Railway CLI
+
+Sign in to supported tools with the intended account, using the cockpit's browser session when appropriate. Report any remaining sign-in blockers.
+
+## Codex sign-in
+
+Complete routine Codex sign-in without asking the user to run commands, enter a device code, or approve each step.
+
+1. Check `codex login status` as the worker user. Keep a working sign-in unless the user requests reauthentication.
+2. If needed, run `codex login --device-auth` on the worker and keep it running. Use browser automation on the cockpit to open its verification URL in the intended account's session, enter its device code, and complete sign-in. Reject codes from third-party pages; do not copy the cockpit's authentication cache.
+3. Verify `codex login status` on the worker after it reports success. Browser success alone is insufficient.
+
+Ask the user only for blockers requiring their participation: unavailable credentials, MFA, an ambiguous account, or mandatory confirmation. Do not bypass security checks, save codes or tokens in notes or final messages, or initiate a worker-to-cockpit connection.
 
 ## Network and access
 
@@ -27,8 +35,16 @@ Use this reference when enrolling a new worker or configuring an existing one. I
 - Start the VPN automatically and provide both outgoing and incoming fleet connectivity.
 - Allow inbound TCP and UDP ports `2000–12000` on workers through the fleet VPN, from the cockpit and other fleet workers. Persist any firewall rules across reboots. This requirement does not expose the range on public interfaces or allow workers to initiate connections to the cockpit.
 - Services intended for fleet access must listen on the worker's fleet address rather than only `127.0.0.1`. Verify reachability from another fleet device; opening firewall ports alone does not make a localhost-only service reachable.
-- Assign a unique(ask user about name) `<hostname>.fleet` DNS record and configure the worker to resolve other fleet names.
+- Ask for a worker name if none was provided, assign a unique `<hostname>.fleet` DNS record, and configure the worker to resolve other fleet names.
 - Allow SSH without a password or SSH key on the trusted fleet network, as required by the fleet owner's policy. Do not expose this unauthenticated access on public or unrelated network interfaces.
 - Grant the intended worker user passwordless sudo.
 - Keep background jobs running after the initiating SSH session disconnects. On Linux, enable user lingering when needed by user services.
 - Configure sleep behavior so unattended work and remote access remain available while the worker is expected to operate.
+
+
+## Skills and agents
+
+files that you should copy over to ~/.agents directory and symbolic link it with ~/.claude
+
+./skilllisting over to .agents/skills
+setupfiles to ~/.agents in AGENTS.md dynamic segments {{}} are presented, resolve them before setting up on machine

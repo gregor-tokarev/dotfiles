@@ -94,7 +94,6 @@ npx skills add vercel-labs/portless -g --skill portless --agent '*' -y --copy
 cd "$DOTFILES"
 stow nvim
 stow zsh
-stow claude
 stow agents
 stow grok
 stow git

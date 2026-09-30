@@ -200,6 +200,29 @@
                         ]
                     },
                     {
+                        "description": "2.4G Wireless Device reverse scroll wheel",
+                        "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "identifiers": [
+                                            {
+                                                "is_pointing_device": true,
+                                                "product_id": 64096,
+                                                "vendor_id": 7511
+                                            }
+                                        ],
+                                        "type": "device_if"
+                                    }
+                                ],
+                                "flip": [
+                                    "vertical_wheel"
+                                ],
+                                "type": "mouse_basic"
+                            }
+                        ]
+                    },
+                    {
                         "description": "Custom Config",
                         "manipulators": [
                             {
@@ -519,10 +542,17 @@
                 },
                 {
                     "identifiers": {
-                        "is_keyboard": true,
                         "is_pointing_device": true,
                         "product_id": 238,
                         "vendor_id": 1118
+                    },
+                    "ignore": false
+                },
+                {
+                    "identifiers": {
+                        "is_pointing_device": true,
+                        "product_id": 64096,
+                        "vendor_id": 7511
                     },
                     "ignore": false
                 },
