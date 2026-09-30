@@ -19,6 +19,10 @@ Use this reference when enrolling a new worker, configuring an existing one, or 
 - C/C++ compiler, make, and pkg-config, using the OS equivalents where necessary
 - kache configured globally for Rust and C/C++ build caching
 - Cargo parallelism capped at half the CPU cores (`jobs` under `[build]` in `~/.cargo/config.toml`), so parallel agent builds don't starve SSH (worker only)
+- CPU priority, so heavy builds can't starve SSH or T3 Code (worker only):
+  - `Nice=-10` and `CPUWeight=1000` drop-ins for every sshd unit. Sessions inherit this, including the T3 Code server launched over SSH.
+  - `t3code.service`: an `ExecStartPost` that renices the service's process tree to -10. The script must snapshot the tree once and skip itself; a recursive walk renices its own children forever.
+  - Compilers at nice 10: `build.rustc-wrapper` points to a script that runs `nice` up to 10, then execs kache. Don't shadow `cargo` on PATH; kache's cargo shim finds the shadow again and recurses forever.
 - Cloudflare CLI (`cf`) and Railway CLI
 
 Sign in to supported tools with the intended account, using the cockpit's browser session when appropriate. Report any remaining sign-in blockers.
