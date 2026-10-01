@@ -9,8 +9,11 @@ Don't end your turn or ask me for confirmation between rounds. Only stop when do
 
 # Waiting
 Reviews and CI take a long time. Never end your turn to wait for a background job or a notification: if the session restarts or sits idle, the job and the notification are lost and the loop dies.
-- Start long jobs in the background, then wait in the foreground with polling commands that each finish in under 10 minutes. Repeat until the job is done.
-- Wait on something specific: the job's PID (`kill -0 <pid>`), an exit marker in its output file, or `gh pr checks --watch`. Never wait on `pgrep -f <pattern>`: it matches your own wait command, so the loop never ends.
+- Start long jobs in the background (`nohup ... &`, note the PID), then wait in the foreground only with `sh <this skill's directory>/wait.sh`, as a Bash call with a 600000 ms timeout:
+  - `wait.sh pid <pid>`: until a process exits (e.g. the codex review)
+  - `wait.sh file <path> <regex>`: until a line appears in a log
+  - `wait.sh checks <pr>`: until CI checks finish
+- Each call blocks up to 9 minutes. Exit 3 means still running: call it again, without a status message in between. Don't write your own polling loops or use shorter waits.
 
 # Setup
 - No PR link given: create one with the file-pr skill, then skip straight to "Review".

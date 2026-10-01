@@ -13,7 +13,7 @@ Use this reference when enrolling a new worker, configuring an existing one, or 
 - Claude Code CLI (`claude`), available in the intended user's terminal and SSH sessions; verify installation and report whether sign-in is still required
 - OpenCode, with its intended provider configured
 - Vite+ with Node.js LTS managed by Vite+
-- T3 Code backend running as a persistent background service (on the cockpit, listening on localhost only)
+- T3 Code: workers are added to the cockpit's T3 app as SSH environments, which launch and update the worker's server from the app. Don't also install the T3 background service (`t3code.service`) on a worker: both servers share `~/.t3`, resume the same threads, and run duplicate agents in one worktree. On the cockpit, T3 listens on localhost only. For mobile clients on the fleet VPN, a `t3-fleet-proxy` user service runs socat on `<fleet IP>:3773` and forwards each connection to the port in `~/.t3/ssh-launch/*/port` (the SSH-launched server listens on localhost, and its port can change on relaunch); pair phones with `http://<fleet IP>:3773/pair#token=<token from t3 pair>` (worker only).
 - Git with the intended user identity configured; GitHub CLI authenticated for the intended account
 - curl, jq, rg, rsync, tar, and unzip
 - C/C++ compiler, make, and pkg-config, using the OS equivalents where necessary
@@ -21,8 +21,12 @@ Use this reference when enrolling a new worker, configuring an existing one, or 
 - Cargo parallelism capped at half the CPU cores (`jobs` under `[build]` in `~/.cargo/config.toml`), so parallel agent builds don't starve SSH (worker only)
 - CPU priority, so heavy builds can't starve SSH or T3 Code (worker only):
   - `Nice=-10` and `CPUWeight=1000` drop-ins for every sshd unit. Sessions inherit this, including the T3 Code server launched over SSH.
-  - `t3code.service`: an `ExecStartPost` that renices the service's process tree to -10. The script must snapshot the tree once and skip itself; a recursive walk renices its own children forever.
-  - Compilers at nice 10: `build.rustc-wrapper` points to a script that runs `nice` up to 10, then execs kache. Don't shadow `cargo` on PATH; kache's cargo shim finds the shadow again and recurses forever.
+  - `build.rustc-wrapper` points to `~/.local/lib/fleet/rustc-gate`, which then execs kache. It allows one cargo build at a time machine-wide: the first cargo process to compile holds the slot (`/run/user/<uid>/cargo-build-slot`), compilers from other cargo processes wait until it exits (logged to `cargo-build-slot.log`), and a cargo nested under the owner may proceed. Compilers run at nice 10 and in the idle I/O class. The worker's SSD saturates when several builds run at once, which freezes T3 and makes the cockpit restart it.
+  - `[profile.dev] debug = "line-tables-only"` in `~/.cargo/config.toml`. Full debuginfo made a debug binary ~1 GB; linking and copying it are buffered writes that no I/O priority can hold back, and they stalled T3's database.
+  - Disk-write cap for agent work: `fleetbuilds.slice` (system slice, `IOWriteBandwidthMax=/dev/sda 20M`; this SSD saturates at ~50 MB/s sustained, so the cap must leave T3 at least half, `IOWeight=10`) and `fleet-builds-mover.service`, a root loop (`/usr/local/libexec/fleet-builds-mover`) that moves `claude`, `codex`, cargo, rustc, linkers, kache and C compilers into the slice every second; everything they spawn inherits it. Only the T3 server and sshd stay uncapped. Without the cap, agents copying binaries or writing large files saturate the slow SSD, T3 misses the cockpit's 1-second readiness check, and the cockpit restarts it in a loop.
+  - Small write-back batches: `vm.dirty_background_bytes = 16777216`, `vm.dirty_bytes = 67108864` in `/etc/sysctl.d/90-fleet-responsiveness.conf`. On ext4 a database fsync waits for every pending write in the same journal batch.
+  - Delete large build trees one at a time with long pauses, and check the machine responds between them. Filesystem journal writes bypass the write cap: deleting ~220 GB of `target/` dirs back to back froze sokolov completely on 2026-10-01 and it needed a hard reset.
+  - BFQ I/O scheduler on the system disk (udev rule `/etc/udev/rules.d/60-fleet-io-scheduler.rules`, `bfq` in `/etc/modules-load.d`), so the idle I/O class is enforced and T3's database syncs go ahead of build writes. `mq-deadline` doesn't enforce it for buffered writes. Don't shadow `cargo` on PATH instead; kache's cargo shim finds the shadow again and recurses forever.
 - Cloudflare CLI (`cf`) and Railway CLI
 
 Sign in to supported tools with the intended account, using the cockpit's browser session when appropriate. Report any remaining sign-in blockers.
