@@ -1,6 +1,6 @@
 ---
 name: endtoend
-description: Apply when the user asks you to make a feature end to end.
+description: Only apply when the user asks you to make a feature end to end. Words end to end should be explisitly mentioned in prompt
 ---
 
 I will not read the output of this work. I want you to carry the changes from the prompt to the main branch. You can ask questions, though, if you really don't know how to unblock yourself.

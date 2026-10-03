@@ -27,14 +27,14 @@ Reviews and CI take a long time. Never end your turn to wait for a background jo
    - Merge conflicts: merge the base branch into the PR branch. Never rebase or force-push.
    - Resolve threads with `gh api graphql` (`resolveReviewThread`).
 2. **Push.** Commit and push all fixes. The reviewer only sees pushed commits.
-3. **Review.** Run `codex exec --dangerously-bypass-approvals-and-sandbox -m <model> -c model_reasoning_effort=xhigh` with a prompt that explicitly invokes the `$review-pr` skill and passes:
+3. **Review.** Run `codex exec --dangerously-bypass-approvals-and-sandbox -m gpt-6.1-sol -c model_reasoning_effort=xhigh` with a prompt that explicitly invokes the `$review-pr` skill and passes:
    1. Pull request link
    2. Absolute path to the worktree you are working in
-
-   Model: `gpt-6-astra` if the PR has no review-pr status comment (`<!-- review-pr-status -->`) yet, since the first review sees the whole diff. `gpt-6.1-sol` for every re-review after that.
 
    Do not edit the worktree while the review runs.
 4. **Wait for review.** Wait for the codex process to exit (see Waiting). The run failed if codex errors, times out, or exits while the review-pr status comment (`<!-- review-pr-status -->`) is still 🔄 Running or doesn't show the current head SHA. Retry a failed run.
 5. **Check.** Done when the status comment shows ✅ Approved for the current head SHA, CI is green, and no human threads are left unanswered. Otherwise go back to 1.
 
 Stop after 15 rounds, or if codex fails twice in a row, and report to me: PR link, open threads, failing checks, and the codex error if any.
+
+Do not merge yourself, if not asked otherwise.
